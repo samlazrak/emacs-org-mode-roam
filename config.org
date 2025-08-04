@@ -1428,6 +1428,53 @@ Sorting =org-roam-node-find= by last modified time seems the most intuitive for 
          :desc "Today"          "j" #'org-roam-dailies-goto-today
          :desc "Tomorrow"       "m" #'org-roam-dailies-goto-tomorrow
          :desc "Yesterday"      "y" #'org-roam-dailies-goto-yesterday)))
+;; Obsidian
+(map! :leader
+        :prefix "n"
+        (:prefix ("O" . "obsidian")
+         ;; Obsidian functions
+         :desc "Obsidian jump to note" "j" #'obsidian-jump
+         :desc "Obsidian capture note" "c" #'obsidian-capture
+         :desc "Obsidian insert wikilink" "l" #'obsidian-insert-wikilink
+         :desc "Obsidian insert link" "L" #'obsidian-insert-link
+         :desc "Obsidian follow link" "f" #'obsidian-follow-link-at-point
+         :desc "Obsidian update metadata" "u" #'obsidian-update
+         :desc "Obsidian tag find" "t" #'obsidian-tag-find
+         :desc "Obsidian change vault" "v" #'obsidian-change-vault
+         :desc "Obsidian specify path" "p" #'obsidian-specify-path
+         :desc "Open vault with treemacs" "V" #'hp/obsidian-open-vault-with-treemacs))
+
+
+;; Custom function to open Obsidian vault with treemacs
+(defun hp/obsidian-open-vault-with-treemacs ()
+  "Open the Obsidian vault directory, split window, and launch treemacs."
+  (interactive)
+  ;; Open the vault directory in dired
+  (find-file obsidian-directory)
+  ;; Split window vertically
+  (split-window-right)
+  ;; Open treemacs
+  (treemacs)
+  ;; Navigate treemacs to the vault directory
+  (treemacs-find-file obsidian-directory))
+
+;; Obsidian package configuration
+(use-package! obsidian
+  :ensure t
+  :defer t
+  :commands (obsidian-jump
+             obsidian-capture
+             obsidian-insert-wikilink
+             obsidian-insert-link
+             obsidian-follow-link-at-point
+             obsidian-update
+             obsidian-tag-find
+             obsidian-change-vault
+             obsidian-specify-path
+             hp/obsidian-open-vault-with-treemacs)
+  :config
+  (setq obsidian-directory "~/Documents/Obsidian/Obsidian/")
+  (global-obsidian-mode))
 
 (use-package! websocket
   :after org-roam)

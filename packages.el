@@ -98,5 +98,8 @@
 (package! markdown-to-org
   :recipe (:host github :repo "modeverv/markdown-to-org"))
 
+;; Obsidian integration
+(package! obsidian)
+
 ;; DoomAI - Local custom module
 ;; No external packages required - uses built-in url.el and json.el
