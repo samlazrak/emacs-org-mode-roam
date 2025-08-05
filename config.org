@@ -2244,7 +2244,56 @@ Show page number when viewing PDFs:
                  :target
                  (file+head "%<%Y%m%d%H%M%S>-${slug}.org"
                             "#+title: ${title}\n#+created: %U\n#+filetags: web\n#+roam_refs: %c\n#+startup: overview\n\n")
+                 :unnarrowed t))
+  ;; Add web clipping template
+  (add-to-list 'org-roam-capture-templates
+               '("c" "clipping" plain "%i\n\n** Source\n- URL: %c\n- Date: %U\n\n** Content\n%?"
+                 :target
+                 (file+head "%<%Y%m%d%H%M%S>-clipping-${slug}.org"
+                            "#+title: ${title}\n#+created: %U\n#+filetags: clippings\n#+roam_refs: %c\n#+startup: overview\n\n")
                  :unnarrowed t)))
+
+;; Function to add clipping to index
+(defun hp/org-roam-add-to-clippings-index (title file-path url)
+  "Add a new clipping entry to the Clippings index."
+  (let ((index-file (expand-file-name "Clippings.org" org-roam-directory)))
+    (unless (file-exists-p index-file)
+      ;; Create the index file if it doesn't exist
+      (with-temp-file index-file
+        (insert "#+title: Clippings Index\n")
+        (insert "#+created: ")
+        (insert (format-time-string "[%Y-%m-%d %a %H:%M]"))
+        (insert "\n#+filetags: index clippings\n")
+        (insert "#+startup: overview\n\n")
+        (insert "* Web Clippings\n\n")
+        (insert "This is an automatically maintained index of all web clippings.\n\n")))
+    
+    ;; Add the new clipping entry
+    (with-current-buffer (find-file-noselect index-file)
+      (goto-char (point-max))
+      (insert (format "- [[file:%s][%s]] - %s\n" 
+                      (file-relative-name file-path org-roam-directory)
+                      title
+                      (format-time-string "%Y-%m-%d")))
+      (when url
+        (insert (format "  - Source: %s\n" url)))
+      (save-buffer))))
+
+;; Hook to auto-add clippings to index
+(defun hp/org-roam-clipping-finalize-hook ()
+  "Hook to run after capturing a web clipping."
+  (when (and (bound-and-true-p org-capture-mode)
+             (string-match-p "clipping" (or (buffer-file-name) "")))
+    (let ((title (org-get-title))
+          (file-path (buffer-file-name))
+          (url (save-excursion
+                 (goto-char (point-min))
+                 (when (re-search-forward "#+roam_refs: \\(.*\\)" nil t)
+                   (match-string 1)))))
+      (when title
+        (hp/org-roam-add-to-clippings-index title file-path url)))))
+
+(add-hook 'org-capture-after-finalize-hook #'hp/org-roam-clipping-finalize-hook)
 
 ***** Multi-Dimensional Note Navigation
 
@@ -2859,9 +2908,10 @@ Show page number when viewing PDFs:
           ;; Research thread visualization
           (:prefix ("v" . "visualization")
            :desc "Identify research threads" "t" #'hp/org-roam-identify-research-threads
-           :desc "Export thread graph" "e" #'hp/org-roam-export-thread-graph))
+           :desc "Export thread graph" "e" #'hp/org-roam-export-thread-graph)))
          
-         :desc "Capture web page" "w" (lambda () (interactive) (org-roam-capture- :keys "w"))))
+         :desc "Capture web page" "w" (lambda () (interactive) (org-roam-capture- :keys "w"))
+         :desc "Capture web clipping" "c" (lambda () (interactive) (org-roam-capture- :keys "c"))))
 
 ;; Custom function to open Obsidian vault with treemacs
 (defun hp/obsidian-open-vault-with-treemacs ()
