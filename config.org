@@ -1996,6 +1996,133 @@ If RECURSIVE is non-nil, process subdirectories as well."
   ;; Then generate indices
   (hp/obsidian-to-org-generate-indices hp/obsidian-org-output-dir))
 
+(defun hp/org-rename-to-zettelkasten (directory)
+  "Rename all org files in DIRECTORY to Zettelkasten format YYYYMMDDHHMMSS-title.org."
+  (interactive "DDirectory: ")
+  (let ((renamed-count 0)
+        (skipped-count 0)
+        (error-count 0))
+    ;; Get all org files recursively
+    (dolist (file (directory-files-recursively directory "\\.org$"))
+      (let ((filename (file-name-nondirectory file)))
+        ;; Check if file already follows Zettelkasten format
+        (unless (or (string-match "^[0-9]\\{14\\}-.*\\.org$" filename)
+                    (string= filename "index.org"))
+          (condition-case err
+              (let ((title nil)
+                    (created-date nil))
+                ;; Extract title and created date from file
+                (with-temp-buffer
+                  (insert-file-contents file nil 0 1000)
+                  ;; Extract title
+                  (goto-char (point-min))
+                  (when (re-search-forward "^#\\+title:\\s-*\\(.+\\)$" nil t)
+                    (setq title (match-string 1)))
+                  ;; Extract created date if available
+                  (goto-char (point-min))
+                  (when (re-search-forward "^#\\+created:\\s-*\\[\\([0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}\\)" nil t)
+                    (setq created-date (match-string 1))))
+                
+                (if title
+                    (let* (;; Generate timestamp
+                           (timestamp (if created-date
+                                         ;; Use created date if available
+                                         (format-time-string "%Y%m%d%H%M%S" 
+                                                           (date-to-time (concat created-date " 00:00:00")))
+                                       ;; Otherwise use file modification time
+                                       (format-time-string "%Y%m%d%H%M%S" 
+                                                         (nth 5 (file-attributes file)))))
+                           ;; Clean title for filename
+                           (clean-title (hp/org-sanitize-title-for-filename title))
+                           ;; Create new filename
+                           (new-filename (format "%s-%s.org" timestamp clean-title))
+                           (new-filepath (expand-file-name new-filename 
+                                                          (file-name-directory file))))
+                      
+                      ;; Check if new filename already exists
+                      (if (file-exists-p new-filepath)
+                          (progn
+                            (message "Skipped %s: Target file already exists" filename)
+                            (setq skipped-count (1+ skipped-count)))
+                        ;; Rename the file
+                        (rename-file file new-filepath)
+                        (message "Renamed: %s -> %s" filename new-filename)
+                        (setq renamed-count (1+ renamed-count))))
+                  ;; No title found
+                  (message "Skipped %s: No title found" filename)
+                  (setq skipped-count (1+ skipped-count))))
+            (error
+             (message "Error renaming %s: %s" filename (error-message-string err))
+             (setq error-count (1+ error-count)))))))
+    
+    ;; Report results
+    (message "Zettelkasten rename complete: %d renamed, %d skipped, %d errors" 
+             renamed-count skipped-count error-count)
+    
+    ;; Update org-roam database if files were renamed
+    (when (> renamed-count 0)
+      (org-roam-db-sync))))
+
+(defun hp/org-sanitize-title-for-filename (title)
+  "Sanitize TITLE to be safe for use in filename."
+  (let ((safe-title title))
+    ;; Remove or replace problematic characters
+    (setq safe-title (replace-regexp-in-string "[/\\:*?\"<>|]" "-" safe-title))
+    ;; Replace multiple spaces with single dash
+    (setq safe-title (replace-regexp-in-string "\\s-+" "-" safe-title))
+    ;; Remove leading/trailing dashes and spaces
+    (setq safe-title (replace-regexp-in-string "^[-\\s]+\\|[-\\s]+$" "" safe-title))
+    ;; Convert to lowercase
+    (setq safe-title (downcase safe-title))
+    ;; Limit length to avoid filesystem issues
+    (if (> (length safe-title) 100)
+        (substring safe-title 0 100)
+      safe-title)))
+
+(defun hp/org-rename-single-file-to-zettelkasten (file)
+  "Rename a single FILE to Zettelkasten format."
+  (interactive "fSelect file to rename: ")
+  (let ((filename (file-name-nondirectory file)))
+    ;; Check if file already follows Zettelkasten format
+    (if (string-match "^[0-9]\\{14\\}-.*\\.org$" filename)
+        (message "File already in Zettelkasten format: %s" filename)
+      (condition-case err
+          (let ((title nil)
+                (created-date nil))
+            ;; Extract title and created date from file
+            (with-temp-buffer
+              (insert-file-contents file nil 0 1000)
+              ;; Extract title
+              (goto-char (point-min))
+              (when (re-search-forward "^#\\+title:\\s-*\\(.+\\)$" nil t)
+                (setq title (match-string 1)))
+              ;; Extract created date if available
+              (goto-char (point-min))
+              (when (re-search-forward "^#\\+created:\\s-*\\[\\([0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}\\)" nil t)
+                (setq created-date (match-string 1))))
+            
+            (if title
+                (let* ((timestamp (if created-date
+                                     (format-time-string "%Y%m%d%H%M%S" 
+                                                       (date-to-time (concat created-date " 00:00:00")))
+                                   (format-time-string "%Y%m%d%H%M%S" 
+                                                     (nth 5 (file-attributes file)))))
+                       (clean-title (hp/org-sanitize-title-for-filename title))
+                       (new-filename (format "%s-%s.org" timestamp clean-title))
+                       (new-filepath (expand-file-name new-filename 
+                                                      (file-name-directory file))))
+                  
+                  (if (file-exists-p new-filepath)
+                      (message "Cannot rename: Target file already exists - %s" new-filename)
+                    (rename-file file new-filepath)
+                    (message "Renamed: %s -> %s" filename new-filename)
+                    ;; Open the renamed file
+                    (find-file new-filepath)
+                    (org-roam-db-update-file))))
+              (message "Cannot rename: No title found in %s" filename)))
+        (error
+         (message "Error renaming %s: %s" filename (error-message-string err)))))))
+
 (defun hp/obsidian-to-org--copy-attachments (source-dir dest-dir)
   "Copy attachment directories from SOURCE-DIR to DEST-DIR."
   (dolist (attach-dir hp/obsidian-attachment-dirs)
@@ -2046,6 +2173,8 @@ If RECURSIVE is non-nil, process subdirectories as well."
         :desc "Import directory (recursive)" "D" #'hp/obsidian-to-org-convert-directory-recursive
         :desc "Generate index files" "i" #'hp/obsidian-to-org-generate-indices
         :desc "Convert & index (recursive)" "I" #'hp/obsidian-to-org-convert-and-index
+        :desc "Rename to Zettelkasten (directory)" "z" #'hp/org-rename-to-zettelkasten
+        :desc "Rename to Zettelkasten (file)" "Z" #'hp/org-rename-single-file-to-zettelkasten
         :desc "Start auto sync" "s" #'hp/obsidian-to-org-auto-sync
         :desc "Stop auto sync" "S" #'hp/obsidian-to-org-stop-auto-sync)))
 #+end_src
