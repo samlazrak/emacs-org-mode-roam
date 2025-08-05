@@ -30,6 +30,7 @@
 
        :os
        tty
+       macos
 
        :ui
        ;;deft                          ; notational velocity for Emacs
@@ -38,11 +39,11 @@
        doom-quit                       ; DOOM quit-message prompts when you quit Emacs
        ;; hl-todo                         ; highlight TODO/FIXME/NOTE/DEPRECATED/HACK/REVIEW
        hydra
-       ;;indent-guides                   ; highlighted indent columns
+       indent-guides                   ; highlighted indent columns
        ;;minimap                       ; show a map of the code on the side
        modeline                        ; snazzy, Atom-inspired modeline, plus API
        ;;nav-flash                     ; blink cursor line after big motions
-       ;;neotree                       ; a project drawer, like NERDTree for vim
+       ;;neotree                       ; a project drawer , like NERDTree for vim
        ophints                         ; highlight the region an operation acts on
        (popup +defaults)               ; tame sudden yet inevitable temporary windows
        (ligatures)
@@ -60,7 +61,7 @@
        (evil +everywhere)              ; come to the dark side, we have cookies
        file-templates                  ; auto-snippets for empty files
        fold                            ; (nigh) universal code folding
-       ;;(format +onsave)              ; automated prettiness
+       (format +onsave)              ; automated prettiness
        ;;god                           ; run Emacs commands without modifier keys
        ;;lispy                         ; vim for lisp, for people who don't like vim
        multiple-cursors                ; editing in many places at once
@@ -82,25 +83,24 @@
        (:if IS-LINUX vterm)            ; the best terminal emulation in Emacs
 
        :checkers
-       ;;syntax                        ; tasing you for every semicolon you forget
+       syntax                        ; tasing you for every semicolon you forget
        ;;spell                         ; tasing you for misspelling mispelling
        ;;grammar                       ; tasing grammar mistake every you make
 
        :tools
        ;;ansible
        biblio
-       ;;debugger                      ; FIXME stepping through code, to help you add bugs
-       ;;direnv
-       ;;docker
-       ;;editorconfig                  ; let someone else argue about tabs vs spaces
+       debugger                      ; FIXME stepping through code, to help you add bugs
+       direnv
+       docker
+       editorconfig                  ; let someone else argue about tabs vs spaces
        ;;ein                           ; tame Jupyter notebooks with emacs
        (eval +overlay)                 ; run code, run (also, repls)
        ;;gist                          ; interacting with github gists
        (lookup +dictionary)            ; navigate your code and its documentation
        lsp
-       ;;macos                         ; MacOS-specific commands
        (magit +forge)                           ; a git porcelain for Emacs
-       ;;make                          ; run make tasks from Emacs
+       make                          ; run make tasks from Emacs
        ;;pass                          ; password manager for nerds
        pdf                             ; pdf enhancements
        ;;prodigy                       ; FIXME managing external services & code builders
@@ -119,7 +119,7 @@
        ;;common-lisp                   ; if you've seen one lisp, you've seen them all
        ;;coq                           ; proofs-as-programs
        ;;crystal                       ; ruby at the speed of c
-       ;;csharp                        ; unity, .NET, and mono shenanigans
+       (csharp +lsp)                        ; unity, .NET, and mono shenanigans
        data                          ; config/data formats
        ;;(dart +flutter)               ; paint ui and not much else
        ;;elixir                        ; erlang done right
@@ -128,19 +128,19 @@
        ;;erlang                        ; an elegant language for a more civilized age
        (ess +lsp)                      ; emacs speaks statistics
        ;;faust                         ; dsp, but you get to keep your soul
-       (fortran +lsp +intel)
-       ;;fsharp                        ; ML stands for Microsoft's Language
+       ;;(fortran +lsp +intel)
+       (fsharp +lsp)                        ; ML stands for Microsoft's Language
        ;;fstar                         ; (dependent) types and (monadic) effects and Z3
        ;;gdscript                      ; the language you waited for
-       ;;(go +lsp)                     ; the hipster dialect
+       (go +lsp)                     ; the hipster dialect
        ;;(haskell +dante)              ; a language that's lazier than I am
        ;;hy                            ; readability of scheme w/ speed of python
        ;;idris
-       ;;json                          ; At least it ain't XML
-       ;;(java +meghanada)             ; the poster child for carpal tunnel syndrome
-       ;;javascript                    ; all(hope(abandon(ye(who(enter(here))))))
+       json                          ; At least it ain't XML
+       (java +meghanada +lsp)             ; the poster child for carpal tunnel syndrome
+       (javascript +lsp)                    ; all(hope(abandon(ye(who(enter(here))))))
        (julia +snail +lsp +tree-sitter); a better, faster MATLAB
-       ;;kotlin                        ; a better, slicker Java(Script)
+       (kotlin +lsp)                        ; a better, slicker Java(Script)
        (latex +latexmk +cdlatex +lsp)  ; writing papers in Emacs has never been so fun
        ;;lean
        ;;factor
@@ -164,13 +164,13 @@
        ;;rest                          ; Emacs as a REST client
        ;;rst                           ; ReST in peace
        ;;(ruby +rails)                 ; 1.step {|i| p "Ruby is #{i.even? ? 'love' : 'life'}"}
-       rust                          ; Fe2O3.unwrap().unwrap().unwrap().unwrap()
+       (rust +lsp)                          ; Fe2O3.unwrap().unwrap().unwrap().unwrap()
        ;;scala                         ; java, but good
        ;;scheme                        ; a fully conniving family of lisps
        (sh +tree-sitter)               ; she sells {ba,z,fi}sh shells on the C xor
        ;;sml
        ;;solidity                      ; do you need a blockchain? No.
-       ;;swift                         ; who asked for emoji variables?
+       (swift +lsp)                         ; who asked for emoji variables?
        ;;terra                         ; Earth and Moon in alignment for performance.
        (web +css +html +lsp)                           ; the tubes
        yaml                          ; JSON, but readable
@@ -183,7 +183,7 @@
        :app
        ;;calendar
        ;;irc                           ; how neckbeards socialize
-       (rss +org)                      ; emacs as an RSS reader
+       ;;(rss +org)                      ; emacs as an RSS reader
        ;;twitter                       ; twitter client https://twitter.com/vnought
 
        :config
@@ -192,4 +192,3 @@
        
        :custom
        doomai)
-;;

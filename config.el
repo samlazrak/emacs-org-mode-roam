@@ -27,6 +27,12 @@
 
 (setq org-directory (concat dropbox-directory "Notes/"))
 
+;; Use POSIX shell for internal Emacs processes to avoid issues with non-POSIX shells
+(setq shell-file-name (executable-find "bash"))
+
+;; But use Fish for terminal emulators
+(setq-default vterm-shell "/opt/homebrew/bin/fish")
+(setq-default explicit-shell-file-name "/opt/homebrew/bin/fish")
 
 ;; This determines the style of line numbers in effect. If set to `nil', line
 ;; numbers are disabled. For relative line numbers, set this to `relative'.
@@ -998,7 +1004,7 @@ TODO abstract backend implementations."
   (setq org-roam-capture-templates
         `(("d" "default" plain "%?"
            :target
-           (file+head "${slug}_%<%Y-%m-%d--%H-%M-%S>.org"
+           (file+head "%<%Y%m%d%H%M%S>-${slug}.org"
                       "#+title: ${title}\n#+created: %U\n#+filetags: %(completing-read \"Function tags: \" hp/org-roam-function-tags)\n#+startup: overview")
            :unnarrowed t))))
 
