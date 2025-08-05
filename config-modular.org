@@ -1,0 +1,56 @@
+:PROPERTIES:
+:ID:       21f80d7d-00f7-4959-9ea2-d7e4b680b272
+:END:
+#+title: My Doom Emacs configuration
+#+startup: hideblocks content
+#+filetags: :compilation:tool:blogs:
+#+date: {{{modification-time(%Y-%m-%d)}}}
+#+export_file_name: Doom-Emacs-config.md
+#+options: toc:5 num:t H:5
+#+property: header-args:emacs-lisp :tangle yes :noweb yes
+
+* Introduction :ignore:
+Emacs is certainly a strange piece of software.
+It was created in the 1970s and is still in active development until this day, preserving weird concepts like "buffers" and "frame" and "fontification" in its documentation.
+It calls the button =Ctrl= on modern keyboards as ~C~ and the =Alt= button as ~M~ (Meta).
+In default settings, you copy text by pressing ~M-w~ , "kill" (in modern language: cut) by ~C-w~, and paste by ~C-y~.
+In order to customize Emacs, you need to use a dedicated programming language called Emacs Lisp.
+
+But despite all that, Emacs has become the central piece of software that I use to interact with my computer.
+It's still just an text editor, but the one that you can spend hours to fine-tune it just the way you want it to be.
+In my journey to learn Emacs, I also learnt a lot about how my computer works.
+Along the way, I learnt how to code and I learnt how to write.
+These days, I learn about stuffs beyond the computer, yet Emacs is still my friend.
+
+This document describes how I set up my Emacs, in [[https://en.wikipedia.org/wiki/Literate_programming][literate programming]] style, using a plain text format closely related to Emacs called [[https://orgmode.org/][Org-mode]].
+The configuration is now organized into modular sections for better maintainability.
+This Emacs configuration is built based on a configuration framework called [[https://github.com/doomemacs/][Doom Emacs]], hence the name of this document.
+
+* Main Configuration
+This is the main configuration file that loads all the modular components.
+For detailed documentation of each section, see the files in the config/ directory.
+
+#+begin_src emacs-lisp
+;;; config.el --- Main Doom Emacs configuration -*- lexical-binding: t; -*-
+
+;; This file is generated from config.org. Do not edit it directly.
+;; Instead, edit config.org and re-tangle with M-x org-babel-tangle
+
+;; Load configuration modules in order
+#+end_src
+
+** Load All Modules
+This approach directly loads the configuration from the modular org files.
+Note: This requires the org files to be tangled separately.
+
+#+begin_src emacs-lisp
+;; Alternative approach: If you want to keep the modular files separate,
+;; you can load them individually after tangling each one:
+;; (load! "config/01-fundamentals")
+;; (load! "config/02-ui-interface") 
+;; (load! "config/03-editing")
+;; etc...
+
+;; For now, we include all configuration directly in this file
+;; since org-mode tangling doesn't process #+INCLUDE directives
+#+end_src

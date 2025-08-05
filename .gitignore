@@ -16,6 +16,7 @@
 !themes/**
 !snippets/
 !snippets/**
+!config*
 
 # Note: config.el is auto-generated from config.org, so it's ignored
 
