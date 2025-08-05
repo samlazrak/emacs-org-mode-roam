@@ -84,7 +84,7 @@ system-configuration-features
     (setq dropbox-directory "/mnt/c/Users/m3/Dropbox/")
   (setq dropbox-directory "~/Dropbox/"))
 
-(setq org-directory "~/org/")
+(setq org-directory "~/org")
 
 ;; Add org-roam tools to PATH
 (setenv "PATH" (concat (expand-file-name "~/org/roam/tools/bin") ":" (getenv "PATH")))
@@ -482,7 +482,9 @@ The cursor position is temporarily saved and restored to its original location a
 (use-package! evil
   :init
   (setq evil-move-beyond-eol t
-        evil-move-cursor-back nil))
+        evil-move-cursor-back nil)
+  :config
+  (evil-mode 1))
 
 (use-package! evil-escape
   :config
@@ -1444,7 +1446,36 @@ Sorting =org-roam-node-find= by last modified time seems the most intuitive for 
            :target
            (file+head "%<%Y-%m-%d>.org"
                       "#+title: %<%Y-%m-%d %a>\n#+filetags: journal\n#+startup: content\n#+created: %U\n\n")
-           :immediate-finish t)))
+           :immediate-finish t))))
+
+;; Add web capture template to org-roam-capture-templates
+(after! org-roam-capture
+  (add-to-list 'org-roam-capture-templates
+               '("w" "web" plain "%i\n\n%?"
+                 :target
+                 (file+head "%<%Y%m%d%H%M%S>-${slug}.org"
+                            "#+title: ${title}\n#+created: %U\n#+filetags: web\n#+roam_refs: %c\n#+startup: overview\n\n")
+                 :unnarrowed t)))
+
+***** Org-download configuration
+#+begin_src emacs-lisp
+(use-package! org-download
+  :after org
+  :config
+  (setq org-download-method 'directory
+        org-download-image-dir "attachments"
+        org-download-heading-lvl nil
+        org-download-timestamp "%Y%m%d-%H%M%S_"
+        org-download-screenshot-method "screencapture -i %s"
+        org-download-screenshot-file (expand-file-name "screenshot.png" temporary-file-directory))
+  
+  ;; Automatically download images when pasting URLs
+  (setq org-download-image-html-width 600)
+  
+  ;; Enable drag-and-drop for images
+  (org-download-enable))
+#+end_src
+
   (map! :leader
         :prefix "n"
         (:prefix ("j" . "journal")
@@ -1474,7 +1505,8 @@ Sorting =org-roam-node-find= by last modified time seems the most intuitive for 
         (:prefix ("r" . "roam")
          (:prefix ("t" . "tools")
           :desc "Rename roam files" "r" #'hp/org-roam-rename-files
-          :desc "Flatten roam files" "f" #'hp/org-roam-flatten-files)))
+          :desc "Flatten roam files" "f" #'hp/org-roam-flatten-files)
+         :desc "Capture web page" "w" (lambda () (interactive) (org-roam-capture- :keys "w"))))
 
 ;; Custom function to open Obsidian vault with treemacs
 (defun hp/obsidian-open-vault-with-treemacs ()
@@ -2585,11 +2617,6 @@ This makes the comand =citar-open-notes=  (bind to ~SPC n b~) use Org-roam's tem
 The bibliography notes created this way will be set up with proper =ID= and =ROAM_REFS= properties.
 The integration also comes with a nice inteface when following an org citation
 
-#+caption: Following a citation in Org-mode, with Citar and Org-roam integraion
-[[file:pics/citar-org-roam-follow.png]]
-
-Here's the relevent part:
-
 #+begin_src emacs-lisp
 (use-package citar-org-roam
   :after citar org-roam
@@ -2616,6 +2643,10 @@ Here's the relevent part:
            ) "\n"))
   (citar-org-roam-mode))
 #+end_src
+
+#+RESULTS:
+: t
+
 **** Backlinks count display
 
 #+begin_src emacs-lisp
@@ -2913,7 +2944,9 @@ Rudimentary =matlab-mode= setups.
   (rmh-elfeed-org-files (list (concat org-directory "/Feeds/elfeed.org")))
   (elfeed-db-directory (concat org-directory "/Feeds/elfeed.db/"))
   (elfeed-goodies/wide-threshold 0.2)
-  :bind ("<f10>" . #'elfeed)
+  (map! :leader
+        :prefix "e"
+          :desc "efleed" "e" #'elfeed)
   :config
   ;; (defun hp/elfeed-entry-line-draw (entry)
   ;;   (insert (format "%s" (elfeed-meta--plist entry))))

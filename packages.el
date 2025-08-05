@@ -98,6 +98,9 @@
 (package! markdown-to-org
   :recipe (:host github :repo "modeverv/markdown-to-org"))
 
+(package! org-download
+  :recipe (:host github :repo "abo-abo/org-download"))
+
 ;; Obsidian integration
 (package! obsidian)
 

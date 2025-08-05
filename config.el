@@ -32,7 +32,7 @@
     (setq dropbox-directory "/mnt/c/Users/m3/Dropbox/")
   (setq dropbox-directory "~/Dropbox/"))
 
-(setq org-directory "~/org/")
+(setq org-directory "~/org")
 
 ;; Add org-roam tools to PATH
 (setenv "PATH" (concat (expand-file-name "~/org/roam/tools/bin") ":" (getenv "PATH")))
@@ -283,7 +283,9 @@ ARG and REDISPLAY are identical to the original function."
 (use-package! evil
   :init
   (setq evil-move-beyond-eol t
-        evil-move-cursor-back nil))
+        evil-move-cursor-back nil)
+  :config
+  (evil-mode 1))
 
 (use-package! evil-escape
   :config
@@ -1027,86 +1029,6 @@ TODO abstract backend implementations."
     (shell-command "flatten")
     (org-roam-db-sync)
     (message "Org-roam flatten completed and database synced.")))
-
-(use-package! org-roam-capture
-  :config
-  (setq org-roam-capture-templates
-        `(("d" "default" plain "%?"
-           :target
-           (file+head "%<%Y%m%d%H%M%S>-${slug}.org"
-                      "#+title: ${title}\n#+created: %U\n#+filetags: %(completing-read \"Function tags: \" hp/org-roam-function-tags)\n#+startup: overview")
-           :unnarrowed t))))
-
-(use-package! org-roam-dailies
-  :config
-  (setq org-roam-dailies-directory "journal/"
-        org-roam-dailies-capture-templates
-        '(("d" "daily" entry "* %?"
-           :target
-           (file+head "%<%Y-%m-%d>.org"
-                      "#+title: %<%Y-%m-%d %a>\n#+filetags: journal\n#+startup: content\n#+created: %U\n\n")
-           :immediate-finish t)))
-  (map! :leader
-        :prefix "n"
-        (:prefix ("j" . "journal")
-         :desc "Arbitrary date" "d" #'org-roam-dailies-goto-date
-         :desc "Today"          "j" #'org-roam-dailies-goto-today
-         :desc "Tomorrow"       "m" #'org-roam-dailies-goto-tomorrow
-         :desc "Yesterday"      "y" #'org-roam-dailies-goto-yesterday)))
-;; Obsidian
-(map! :leader
-        :prefix "n"
-        (:prefix ("O" . "obsidian")
-         ;; Obsidian functions
-         :desc "Obsidian jump to note" "j" #'obsidian-jump
-         :desc "Obsidian capture note" "c" #'obsidian-capture
-         :desc "Obsidian insert wikilink" "l" #'obsidian-insert-wikilink
-         :desc "Obsidian insert link" "L" #'obsidian-insert-link
-         :desc "Obsidian follow link" "f" #'obsidian-follow-link-at-point
-         :desc "Obsidian update metadata" "u" #'obsidian-update
-         :desc "Obsidian tag find" "t" #'obsidian-tag-find
-         :desc "Obsidian change vault" "v" #'obsidian-change-vault
-         :desc "Obsidian specify path" "p" #'obsidian-specify-path
-         :desc "Open vault with treemacs" "V" #'hp/obsidian-open-vault-with-treemacs))
-
-;; Org-roam tools keybindings
-(map! :leader
-        :prefix "n"
-        (:prefix ("r" . "roam")
-         (:prefix ("t" . "tools")
-          :desc "Rename roam files" "r" #'hp/org-roam-rename-files
-          :desc "Flatten roam files" "f" #'hp/org-roam-flatten-files)))
-
-;; Custom function to open Obsidian vault with treemacs
-(defun hp/obsidian-open-vault-with-treemacs ()
-  "Open the Obsidian vault directory, split window, and launch treemacs."
-  (interactive)
-  ;; Open the vault directory in dired
-  (find-file obsidian-directory)
-  ;; Split window vertically
-  (split-window-right)
-  ;; Open treemacs
-  (treemacs)
-  ;; Navigate treemacs to the vault directory
-  (treemacs-find-file obsidian-directory))
-
-;; Obsidian package configuration
-(use-package! obsidian
-  :ensure t
-  :defer t
-  :commands (obsidian-jump
-             obsidian-capture
-             obsidian-insert-wikilink
-             obsidian-insert-link
-             obsidian-follow-link-at-point
-             obsidian-update
-             obsidian-tag-find
-             obsidian-change-vault
-             obsidian-specify-path
-             hp/obsidian-open-vault-with-treemacs)
-  :config
-  (setq obsidian-directory "~/Documents/Obsidian/Obsidian/")
-  (global-obsidian-mode))
 
 ;; Core conversion functions for Obsidian to Org-mode
 (defvar hp/obsidian-org-output-dir (concat org-roam-directory "obsidian-import/")
@@ -2385,7 +2307,9 @@ This function is meant to clean out empty org-roam-dailies files."
   (rmh-elfeed-org-files (list (concat org-directory "/Feeds/elfeed.org")))
   (elfeed-db-directory (concat org-directory "/Feeds/elfeed.db/"))
   (elfeed-goodies/wide-threshold 0.2)
-  :bind ("<f10>" . #'elfeed)
+  (map! :leader
+        :prefix "e"
+          :desc "efleed" "e" #'elfeed)
   :config
   ;; (defun hp/elfeed-entry-line-draw (entry)
   ;;   (insert (format "%s" (elfeed-meta--plist entry))))
