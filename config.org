@@ -2079,14 +2079,132 @@ If RECURSIVE is non-nil, process subdirectories as well."
         (substring safe-title 0 100)
       safe-title)))
 
+(defun hp/org-extract-tags-from-title (title)
+  "Extract tags from TITLE string and return (clean-title . tags-list).
+For example, 'DoomAI :tool:doomai:ai:' returns ('DoomAI' . '(tool doomai ai)')"
+  (if (string-match "^\\([^:]+\\)\\(\\s-*:\\(?:[^:]+:\\)+\\)\\s-*$" title)
+      (let ((clean-title (match-string 1 title))
+            (tags-part (match-string 2 title)))
+        ;; Extract individual tags from :tag1:tag2:tag3:
+        (let ((tags '()))
+          (string-match ":\\(.*\\):" tags-part)
+          (when (match-string 1 tags-part)
+            (setq tags (split-string (match-string 1 tags-part) ":" t)))
+          (cons (string-trim clean-title) tags)))
+    ;; No tags found, return title as-is
+    (cons (string-trim title) nil)))
+
+(defun hp/zettelkasten-timestamp-to-org-date (timestamp)
+  "Convert Zettelkasten TIMESTAMP (YYYYMMDDHHmmss) to org date format.
+For example, '20250803183700' returns '[2025-08-03 Sun 18:37]'"
+  (when (string-match "^\\([0-9]\\{4\\}\\)\\([0-9]\\{2\\}\\)\\([0-9]\\{2\\}\\)\\([0-9]\\{2\\}\\)\\([0-9]\\{2\\}\\)" timestamp)
+    (let* ((year (match-string 1 timestamp))
+           (month (match-string 2 timestamp))
+           (day (match-string 3 timestamp))
+           (hour (match-string 4 timestamp))
+           (minute (match-string 5 timestamp))
+           (date-string (format "%s-%s-%s %s:%s" year month day hour minute))
+           (time (date-to-time date-string))
+           (day-name (format-time-string "%a" time)))
+      (format "[%s-%s-%s %s %s:%s]" year month day day-name hour minute))))
+
 (defun hp/org-rename-single-file-to-zettelkasten (file)
-  "Rename a single FILE to Zettelkasten format."
-  (interactive "fSelect file to rename: ")
+  "Process and optionally rename a single FILE to Zettelkasten format.
+If the file is already in Zettelkasten format, it will update the file content:
+- Clean title by removing tags
+- Add #+created: from filename timestamp
+- Move tags to #+filetags:
+- Add #+startup: overview if missing"
+  (interactive "fSelect file to process: ")
   (let ((filename (file-name-nondirectory file)))
-    ;; Check if file already follows Zettelkasten format
-    (if (string-match "^[0-9]\\{14\\}-.*\\.org$" filename)
-        (message "File already in Zettelkasten format: %s" filename)
-      (condition-case err
+    (condition-case err
+        (if (string-match "^\\([0-9]\\{14\\}\\)-.*\\.org$" filename)
+            ;; File is already in Zettelkasten format - update its content
+            (let* ((timestamp (match-string 1 filename))
+                   (org-date (hp/zettelkasten-timestamp-to-org-date timestamp))
+                   (file-content (with-temp-buffer
+                                 (insert-file-contents file)
+                                 (buffer-string)))
+                   (lines (split-string file-content "\n"))
+                   (title nil)
+                   (clean-title nil)
+                   (tags nil)
+                   (has-created nil)
+                   (has-filetags nil)
+                   (has-startup nil)
+                   (new-lines '()))
+              
+              ;; Process each line
+              (dolist (line lines)
+                (cond
+                 ;; Process title line
+                 ((string-match "^#\\+title:\\s-*\\(.+\\)$" line)
+                  (setq title (match-string 1 line))
+                  (let ((title-parts (hp/org-extract-tags-from-title title)))
+                    (setq clean-title (car title-parts))
+                    (setq tags (cdr title-parts))
+                    (push (format "#+title: %s" clean-title) new-lines)))
+                 
+                 ;; Check for existing metadata
+                 ((string-match "^#\\+created:" line)
+                  (setq has-created t)
+                  (push line new-lines))
+                 
+                 ((string-match "^#\\+filetags:" line)
+                  (setq has-filetags t)
+                  ;; If we have tags from title, update filetags
+                  (if tags
+                      (push (format "#+filetags: %s" (mapconcat 'identity tags " ")) new-lines)
+                    (push line new-lines)))
+                 
+                 ((string-match "^#\\+startup:" line)
+                  (setq has-startup t)
+                  (push line new-lines))
+                 
+                 ;; Keep other lines as-is
+                 (t (push line new-lines))))
+              
+              ;; Add missing metadata after title
+              (setq new-lines (nreverse new-lines))
+              (let ((title-pos (cl-position-if (lambda (line) (string-match "^#\\+title:" line)) new-lines)))
+                (when title-pos
+                  (let ((insert-pos (1+ title-pos))
+                        (insertions '()))
+                    
+                    ;; Add missing metadata in reverse order (they'll be reversed when inserted)
+                    (unless has-startup
+                      (push "#+startup: overview" insertions))
+                    
+                    (unless has-filetags
+                      (when tags
+                        (push (format "#+filetags: %s" (mapconcat 'identity tags " ")) insertions)))
+                    
+                    (unless has-created
+                      (when org-date
+                        (push (format "#+created: %s" org-date) insertions)))
+                    
+                    ;; Insert the metadata
+                    (dolist (insertion insertions)
+                      (setq new-lines (append (cl-subseq new-lines 0 insert-pos)
+                                            (list insertion)
+                                            (cl-subseq new-lines insert-pos)))))))
+              
+              ;; Write the updated content back to file
+              (with-temp-file file
+                (insert (mapconcat 'identity new-lines "\n")))
+              
+              (message "Updated metadata in: %s" filename)
+              
+              ;; If file is open, revert it
+              (let ((buf (get-file-buffer file)))
+                (when buf
+                  (with-current-buffer buf
+                    (revert-buffer t t))))
+              
+              ;; Update org-roam database
+              (org-roam-db-update-file))
+          
+          ;; File is not in Zettelkasten format - rename it
           (let ((title nil)
                 (created-date nil))
             ;; Extract title and created date from file
@@ -2102,26 +2220,58 @@ If RECURSIVE is non-nil, process subdirectories as well."
                 (setq created-date (match-string 1))))
             
             (if title
-                (let* ((timestamp (if created-date
-                                     (format-time-string "%Y%m%d%H%M%S" 
-                                                       (date-to-time (concat created-date " 00:00:00")))
-                                   (format-time-string "%Y%m%d%H%M%S" 
-                                                     (nth 5 (file-attributes file)))))
-                       (clean-title (hp/org-sanitize-title-for-filename title))
-                       (new-filename (format "%s-%s.org" timestamp clean-title))
+                (let* ((title-parts (hp/org-extract-tags-from-title title))
+                       (clean-title (car title-parts))
+                       (timestamp (if created-date
+                                    (format-time-string "%Y%m%d%H%M%S" 
+                                                      (date-to-time (concat created-date " 00:00:00")))
+                                  (format-time-string "%Y%m%d%H%M%S" 
+                                                    (nth 5 (file-attributes file)))))
+                       (sanitized-title (hp/org-sanitize-title-for-filename clean-title))
+                       (new-filename (format "%s-%s.org" timestamp sanitized-title))
                        (new-filepath (expand-file-name new-filename 
-                                                      (file-name-directory file))))
+                                                     (file-name-directory file))))
                   
                   (if (file-exists-p new-filepath)
                       (message "Cannot rename: Target file already exists - %s" new-filename)
                     (rename-file file new-filepath)
                     (message "Renamed: %s -> %s" filename new-filename)
-                    ;; Open the renamed file
-                    (find-file new-filepath)
-                    (org-roam-db-update-file))))
-              (message "Cannot rename: No title found in %s" filename)))
-        (error
-         (message "Error renaming %s: %s" filename (error-message-string err))))))
+                    ;; Process the renamed file to update its content
+                    (hp/org-rename-single-file-to-zettelkasten new-filepath)))
+              (message "Cannot rename: No title found in %s" filename))))
+      (error
+       (message "Error processing %s: %s" filename (error-message-string err))))))
+
+(defun hp/org-process-zettelkasten-directory (directory)
+  "Process all org files in DIRECTORY recursively to update metadata.
+For files already in Zettelkasten format, updates their content:
+- Cleans titles by removing tags
+- Adds #+created: from filename timestamp
+- Moves tags to #+filetags:
+- Adds #+startup: overview if missing
+For files not in Zettelkasten format, renames them first."
+  (interactive "DDirectory: ")
+  (let ((processed-count 0)
+        (error-count 0))
+    ;; Get all org files recursively
+    (dolist (file (directory-files-recursively directory "\\.org$"))
+      (unless (string= (file-name-nondirectory file) "index.org")
+        (condition-case err
+            (progn
+              (message "Processing: %s" file)
+              (hp/org-rename-single-file-to-zettelkasten file)
+              (setq processed-count (1+ processed-count)))
+          (error
+           (message "Error processing %s: %s" file (error-message-string err))
+           (setq error-count (1+ error-count))))))
+    
+    ;; Summary
+    (message "Processing complete: %d files processed, %d errors" 
+             processed-count error-count)
+    
+    ;; Update org-roam database if files were processed
+    (when (> processed-count 0)
+      (org-roam-db-sync))))
 
 (defun hp/obsidian-to-org--copy-attachments (source-dir dest-dir)
   "Copy attachment directories from SOURCE-DIR to DEST-DIR."
@@ -2175,6 +2325,7 @@ If RECURSIVE is non-nil, process subdirectories as well."
         :desc "Convert & index (recursive)" "I" #'hp/obsidian-to-org-convert-and-index
         :desc "Rename to Zettelkasten (directory)" "z" #'hp/org-rename-to-zettelkasten
         :desc "Rename to Zettelkasten (file)" "Z" #'hp/org-rename-single-file-to-zettelkasten
+        :desc "Process Zettelkasten directory (update metadata)" "p" #'hp/org-process-zettelkasten-directory
         :desc "Start auto sync" "s" #'hp/obsidian-to-org-auto-sync
         :desc "Stop auto sync" "S" #'hp/obsidian-to-org-stop-auto-sync)))
 #+end_src
