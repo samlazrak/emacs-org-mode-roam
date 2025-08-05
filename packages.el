@@ -103,3 +103,8 @@
 
 ;; Obsidian integration
 (package! obsidian)
+
+(package! org-web-tools
+  :recipe (:host github
+           :repo "alphapapa/org-web-tools"
+           :files ("*.el" "filters" "preprocessors")))

@@ -2908,7 +2908,16 @@ Show page number when viewing PDFs:
           ;; Research thread visualization
           (:prefix ("v" . "visualization")
            :desc "Identify research threads" "t" #'hp/org-roam-identify-research-threads
-           :desc "Export thread graph" "e" #'hp/org-roam-export-thread-graph)))
+           :desc "Export thread graph" "e" #'hp/org-roam-export-thread-graph)
+          
+          ;; Org-web-tools
+          (:prefix ("w" . "web tools")
+           :desc "Insert link for URL" "l" #'org-web-tools-insert-link-for-url
+           :desc "Insert web page as entry" "e" #'org-web-tools-insert-web-page-as-entry
+           :desc "Read URL as Org" "r" #'org-web-tools-read-url-as-org
+           :desc "Convert links to page entries" "c" #'org-web-tools-convert-links-to-page-entries
+           :desc "Archive attach" "a" #'org-web-tools-archive-attach
+           :desc "Archive view" "v" #'org-web-tools-archive-view)))
          
          :desc "Capture web page" "w" (lambda () (interactive) (org-roam-capture- :keys "w"))
          :desc "Capture web clipping" "c" (lambda () (interactive) (org-roam-capture- :keys "c"))))
