@@ -8,23 +8,16 @@
 #+export_file_name: Doom-Emacs-config.md
 #+options: toc:5 num:t H:5
 
-* Introduction :ignore:
-Emacs is certainly a strange piece of software.
-It was created in the 1970s and is still in active development until this day, preserving weird concepts like "buffers" and "frame" and "fontification" in its documentation.
-It calls the button =Ctrl= on modern keyboards as ~C~ and the =Alt= button as ~M~ (Meta).
-In default settings, you copy text by pressing ~M-w~ , "kill" (in modern language: cut) by ~C-w~, and paste by ~C-y~.
-In order to customize Emacs, you need to use a dedicated programming language called Emacs Lisp.
-
-But despite all that, Emacs has become the central piece of software that I use to interact with my computer.
-It's still just an text editor, but the one that you can spend hours to fine-tune it just the way you want it to be.
-In my journey to learn Emacs, I also learnt a lot about how my computer works.
-Along the way, I learnt how to code and I learnt how to write.
-These days, I learn about stuffs beyond the computer, yet Emacs is still my friend.
-
-This document describes how I set up my Emacs, in [[https://en.wikipedia.org/wiki/Literate_programming][literate programming]] style, using a plain text format closely related to Emacs called [[https://orgmode.org/][Org-mode]].
-The whole thing is contained in a [[https://raw.githubusercontent.com/hieutkt/dotfiles/main/emacs/.doom.d/config.org][single file]], from which both the Elisp code and this HTML document is generated.
-This Emacs configuration is built based on a configuration framework called [[https://github.com/doomemacs/][Doom Emacs]], hence the name of this document.
-
+* Bash Shell:
+** For Emacs
+#+begin_src emacs-lisp
+(setq shell-file-name (executable-find
+      "bash"))
+(setq-default vterm-shell
+      "/opt/homebrew/bin/fish")
+(setq-default explicit-shell-file-name
+      "/opt/homebrew/bin/fish")
+#+end_src
 * Prerequisites
 ** Reproducible information
 This configuration is continuingly being improved.
@@ -91,10 +84,10 @@ system-configuration-features
     (setq dropbox-directory "/mnt/c/Users/m3/Dropbox/")
   (setq dropbox-directory "~/Dropbox/"))
 
-(setq org-directory (concat dropbox-directory "Notes/"))
+(setq org-directory "~/org/")
 
 ;; Use POSIX shell for internal Emacs processes to avoid issues with non-POSIX shells
-(setq shell-file-name (executable-find "bash"))
+;;(setq shell-file-name (executable-find "bash"))
 
 ;; But use Fish for terminal emulators
 (setq-default vterm-shell "/opt/homebrew/bin/fish")
@@ -1267,7 +1260,7 @@ Now, to set this up for different languages:
 (use-package! org-roam
   :after org
   :init
-  (setq org-roam-directory "~/Documents/Roam/"
+  (setq org-roam-directory "~/org/roam/"
         org-roam-completion-everywhere nil
         ;;Functions tags are special types of tags which tells what the node are for
         ;;In the future, this should probably be replaced by categories

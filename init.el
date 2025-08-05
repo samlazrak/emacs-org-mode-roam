@@ -79,8 +79,10 @@
        vc                              ; version-control and Emacs, sitting in a tree
 
        :term
+       vterm                           ; the best terminal emulation in Emacs
        (:if IS-WINDOWS shell)          ; the elisp shell that works everywhere
        (:if IS-LINUX vterm)            ; the best terminal emulation in Emacs
+       (:if IS-MAC vterm)
 
        :checkers
        syntax                        ; tasing you for every semicolon you forget

@@ -1,3 +1,10 @@
+(setq shell-file-name (executable-find
+      "bash"))
+(setq-default vterm-shell
+      "/opt/homebrew/bin/fish")
+(setq-default explicit-shell-file-name
+      "/opt/homebrew/bin/fish")
+
 ;; Some functionality uses this to identify you, e.g. GPG configuration, email
 ;; clients, file templates and snippets.
 (setq user-full-name "Sam Lazrak"
@@ -25,10 +32,10 @@
     (setq dropbox-directory "/mnt/c/Users/m3/Dropbox/")
   (setq dropbox-directory "~/Dropbox/"))
 
-(setq org-directory (concat dropbox-directory "Notes/"))
+(setq org-directory "~/org/")
 
 ;; Use POSIX shell for internal Emacs processes to avoid issues with non-POSIX shells
-(setq shell-file-name (executable-find "bash"))
+;;(setq shell-file-name (executable-find "bash"))
 
 ;; But use Fish for terminal emulators
 (setq-default vterm-shell "/opt/homebrew/bin/fish")
@@ -865,7 +872,7 @@ TODO abstract backend implementations."
 (use-package! org-roam
   :after org
   :init
-  (setq org-roam-directory "~/Documents/Roam/"
+  (setq org-roam-directory "~/org/roam/"
         org-roam-completion-everywhere nil
         ;;Functions tags are special types of tags which tells what the node are for
         ;;In the future, this should probably be replaced by categories
