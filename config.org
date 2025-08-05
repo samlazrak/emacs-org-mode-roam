@@ -715,7 +715,6 @@ Need to check if ellipsis icon works properly before committing:
            "* %?\n  %U\n  %c\n  %i"))))
 #+end_src
 
-
 *** Org-tempo
 #+begin_src emacs-lisp
 (use-package! org-tempo
@@ -723,7 +722,7 @@ Need to check if ellipsis icon works properly before committing:
   :config
   )
 #+end_src
-*** Org-Pandoc Import/Export
+**** Org-Pandoc Import/Export
 #!begin_src emacs-lisp
 (use-package! org-pandoc-import :after org)
 #+end_src
@@ -2385,6 +2384,7 @@ This is to automate creating a workspace for Org-roam
            "") "\n"))
       :unnarrowed t))))
 #+end_src
+
 **** Org-roam and Org-agenda itegration
 Integrating Org-roam and Org-agenda might be complicated, since Org-roam pushes us towards making many =.org= files, and Org-agenda works best with a few, big =.org= files.
 
@@ -2726,6 +2726,13 @@ The following comand create a new heading and add current time to it.
 
 #+RESULTS:
 : hp/org-insert-timestamped-bullet
+**** Org-Roam UI
+#+begin_src emacs-lisp
+(map! :leader
+  :prefix "n"
+    (:prefix ("r" . "roam")
+      :desc "Open Org-Roam UI"      "u" #'org-roam-ui-open))
+#+end_src
 *** Org-download
 
 #+begin_src emacs-lisp
