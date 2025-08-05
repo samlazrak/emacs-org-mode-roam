@@ -173,9 +173,9 @@ Now to set all this up:
 
 #+begin_src emacs-lisp
 (when (doom-font-exists-p "FiraMono Nerd Font Mono")
-    (setq doom-font                (font-spec :name "FiraMono Nerd Font Mono" :size 14)))
+    (setq doom-font                (font-spec :name "FiraMono Nerd Font Mono" :size 16)))
 (when (doom-font-exists-p "FiraCode Nerd Font Propo")
-    (setq doom-variable-pitch-font (font-spec :name "FiraCode Nerd Font Propo"  :size 16)))
+    (setq doom-variable-pitch-font (font-spec :name "FiraCode Nerd Font Propo"  :size 18)))
 (when (doom-font-exists-p "Noto Color Emoji")
     (setq doom-emoji-font          (font-spec :name "Noto Color Emoji")))
 (when (doom-font-exists-p "FiraMono Nerd Font Mono")
@@ -1262,7 +1262,7 @@ Now, to set this up for different languages:
 (use-package! org-roam
   :after org
   :init
-  (setq org-roam-directory (concat org-directory "/Org-roam/")
+  (setq org-roam-directory "~/Documents/Roam/"
         org-roam-completion-everywhere nil
         ;;Functions tags are special types of tags which tells what the node are for
         ;;In the future, this should probably be replaced by categories
@@ -1475,6 +1475,377 @@ Sorting =org-roam-node-find= by last modified time seems the most intuitive for 
   :config
   (setq obsidian-directory "~/Documents/Obsidian/Obsidian/")
   (global-obsidian-mode))
+#+end_src
+
+**** Obsidian to Org-mode Conversion
+These functions handle converting Obsidian markdown files to org-mode format, preserving
+wikilinks, attachments, and metadata.
+
+#+begin_src emacs-lisp
+;; Core conversion functions for Obsidian to Org-mode
+(defvar hp/obsidian-org-output-dir (concat org-roam-directory "obsidian-import/")
+  "Directory where converted Obsidian files will be stored.")
+
+(defvar hp/obsidian-attachment-dirs '("attachments" "Attachments" "assets" "Assets")
+  "List of common attachment directory names in Obsidian vaults.")
+
+(defun hp/obsidian-to-org--convert-frontmatter (content)
+  "Convert YAML frontmatter in CONTENT to org properties."
+  (if (string-match "^---\n\\(\\(?:.*\n\\)*?\\)---\n" content)
+      (let* ((frontmatter (match-string 1 content))
+             (body (substring content (match-end 0)))
+             (properties '())
+             (org-content ""))
+
+        ;; Parse YAML frontmatter
+        (with-temp-buffer
+          (insert frontmatter)
+          (goto-char (point-min))
+          (while (re-search-forward "^\\([^:]+\\):\\s-*\\(.+\\)$" nil t)
+            (let ((key (match-string 1))
+                  (value (match-string 2)))
+              ;; Clean up values
+              (setq value (replace-regexp-in-string "^[\"']\\|[\"']$" "" value))
+              ;; Handle YAML arrays properly: [tag1, tag2] -> "tag1 tag2"
+              (when (string-match "\\[\\(.+\\)\\]" value)
+                (setq value (match-string 1 value))
+                (setq value (replace-regexp-in-string ",\\s-*" " " value))
+                (setq value (replace-regexp-in-string "-\\s-*" "" value)))
+              (push (cons (upcase (replace-regexp-in-string "-" "_" key)) value) properties))))
+
+        ;; Build org properties drawer
+        (setq org-content ":PROPERTIES:\n")
+        (setq org-content (concat org-content (format ":ID:       %s\n" (org-id-new))))
+        (dolist (prop (reverse properties))
+          (let ((key (car prop))
+                (value (cdr prop)))
+            (cond
+             ((string= key "TITLE")
+              (setq org-content (concat org-content (format ":ROAM_ALIASES: %s\n" value))))
+             ((string= key "TAGS")
+              (setq org-content (concat org-content (format ":ROAM_TAGS: %s\n"
+                                                           (string-trim (replace-regexp-in-string ",\\s-*" " " value))))))
+             ((member key '("CREATED" "DATE" "LASTMODIFIED" "MODIFIED"))
+              (setq org-content (concat org-content (format ":%s: %s\n" key value))))
+             (t
+              (setq org-content (concat org-content (format ":%s: %s\n" key value)))))))
+        (setq org-content (concat org-content ":END:\n"))
+
+        ;; Add title if present
+        (when-let ((title (cdr (assoc "TITLE" properties))))
+          (setq org-content (concat org-content (format "#+title: %s\n" title))))
+
+        ;; Add filetags
+        (when-let ((tags (cdr (assoc "TAGS" properties))))
+          (let ((cleaned-tags (string-trim (replace-regexp-in-string ",\\s-*" " :" tags))))
+            (setq org-content (concat org-content (format "#+filetags: :%s\n" cleaned-tags)))))
+
+        (concat org-content "\n" body))
+    content))
+
+(defun hp/obsidian-to-org--convert-wikilinks (content)
+  "Convert Obsidian wikilinks in CONTENT to org links."
+  (let ((link-map '()))
+    ;; First pass: collect all wikilinks and create ID mappings
+    (with-temp-buffer
+      (insert content)
+      (goto-char (point-min))
+      (while (re-search-forward "\\[\\[\\([^]|]+\\)\\(?:|\\([^]]+\\)\\)?\\]\\]" nil t)
+        (let* ((link (match-string 1))
+               (desc (or (match-string 2) link))
+               (id (org-id-new)))
+          (push (list link desc id) link-map))))
+
+    ;; Second pass: replace wikilinks with org-roam links
+    (dolist (link-info link-map)
+      (let ((link (nth 0 link-info))
+            (desc (nth 1 link-info))
+            (id (nth 2 link-info)))
+        (setq content (replace-regexp-in-string
+                      (regexp-quote (format "[[%s]]" link))
+                      (format "[[id:%s][%s]]" id desc)
+                      content))
+        (setq content (replace-regexp-in-string
+                      (regexp-quote (format "[[%s|%s]]" link desc))
+                      (format "[[id:%s][%s]]" id desc)
+                      content))))
+    content))
+
+(defun hp/obsidian-to-org--convert-image-embeds (content base-dir output-dir)
+  "Convert Obsidian image embeds in CONTENT to org syntax.
+BASE-DIR is the source directory, OUTPUT-DIR is the destination."
+  (let ((attachments-copied '()))
+    (with-temp-buffer
+      (insert content)
+      (goto-char (point-min))
+
+      ;; Convert ![[image]] syntax
+      (while (re-search-forward "!\\[\\[\\([^]]+\\)\\]\\]" nil t)
+        (let* ((image-ref (match-string 1))
+               (image-name (file-name-nondirectory image-ref))
+               (new-path ""))
+
+          ;; Find the actual image file
+          (catch 'found
+            (dolist (attach-dir hp/obsidian-attachment-dirs)
+              (let ((possible-path (expand-file-name image-ref
+                                                   (expand-file-name attach-dir base-dir))))
+                (when (file-exists-p possible-path)
+                  ;; Copy attachment if not already copied
+                  (unless (member possible-path attachments-copied)
+                    (let ((dest-dir (expand-file-name "assets" output-dir)))
+                      (make-directory dest-dir t)
+                      (copy-file possible-path
+                               (expand-file-name image-name dest-dir)
+                               t)
+                      (push possible-path attachments-copied)))
+                  (setq new-path (format "[[file:./assets/%s]]" image-name))
+                  (throw 'found t)))))
+
+          ;; Replace the image reference
+          (when new-path
+            (replace-match new-path t t))))
+
+      ;; Convert ![](url) syntax
+      (goto-char (point-min))
+      (while (re-search-forward "!\\[\\([^]]*\\)\\](\\([^)]+\\))" nil t)
+        (let ((alt-text (match-string 1))
+              (url (match-string 2)))
+          (replace-match (format "[[%s][%s]]" url (or alt-text url)) t t)))
+
+      (buffer-string))))
+
+(defun hp/obsidian-to-org--convert-tags (content)
+  "Convert Obsidian #tags in CONTENT to org format."
+  ;; Convert standalone tags
+  (setq content (replace-regexp-in-string
+                "\\(?:^\\|\\s-\\)#\\([a-zA-Z0-9_-]+\\)"
+                " :\\1:"
+                content))
+  content)
+
+(defun hp/obsidian-to-org--convert-buffer-content (content base-dir output-dir)
+  "Convert Obsidian markdown CONTENT to org format.
+BASE-DIR is the source directory, OUTPUT-DIR is the destination."
+  (condition-case err
+      (let ((result content))
+        ;; Apply conversions step by step with error handling
+        (condition-case sub-err
+            (setq result (hp/obsidian-to-org--convert-frontmatter result))
+          (error (message "Frontmatter conversion error: %s" (error-message-string sub-err))))
+        
+        (condition-case sub-err
+            (setq result (hp/obsidian-to-org--convert-wikilinks result))
+          (error (message "Wikilinks conversion error: %s" (error-message-string sub-err))))
+        
+        (condition-case sub-err
+            (setq result (hp/obsidian-to-org--convert-image-embeds result base-dir output-dir))
+          (error (message "Image conversion error: %s" (error-message-string sub-err))))
+        
+        (condition-case sub-err
+            (setq result (hp/obsidian-to-org--convert-tags result))
+          (error (message "Tags conversion error: %s" (error-message-string sub-err))))
+        
+        ;; Text formatting conversions with fixed regexes
+        (condition-case sub-err
+            ;; Convert markdown headers to org headers: # Header → * Header
+            ;; But NOT org directives like #+title: or #+filetags:
+            (setq result (replace-regexp-in-string "^\\(#+\\)\\s-*\\([^+:].+\\)$" 
+                                                   (lambda (match)
+                                                     (let ((hashes (match-string 1 match))
+                                                           (content (match-string 2 match)))
+                                                       (concat (make-string (length hashes) ?*) " " content)))
+                                                   result))
+          (error (message "Headers conversion error: %s" (error-message-string sub-err))))
+        
+        (condition-case sub-err
+            (setq result (replace-regexp-in-string "\\*\\*\\([^*\n]+\\)\\*\\*" "*\\1*" result))
+          (error (message "Bold conversion error: %s" (error-message-string sub-err))))
+        
+        (condition-case sub-err
+            (setq result (replace-regexp-in-string "__\\([^_\n]+\\)__" "*\\1*" result))
+          (error (message "Bold alt conversion error: %s" (error-message-string sub-err))))
+        
+        (condition-case sub-err
+            (setq result (replace-regexp-in-string "\\b_\\([^_\n]+\\)_\\b" "/\\1/" result))
+          (error (message "Italic conversion error: %s" (error-message-string sub-err))))
+        
+        (condition-case sub-err
+            (setq result (replace-regexp-in-string "~~\\([^~\n]+\\)~~" "+\\1+" result))
+          (error (message "Strikethrough conversion error: %s" (error-message-string sub-err))))
+        
+        (condition-case sub-err
+            (setq result (replace-regexp-in-string "==\\([^=\n]+\\)==" "@@html:<mark>@@\\1@@html:</mark>@@" result))
+          (error (message "Highlight conversion error: %s" (error-message-string sub-err))))
+        
+        ;; Convert code blocks
+        (condition-case sub-err
+            (setq result (replace-regexp-in-string "```\\([a-zA-Z0-9-_+]*\\)\\s-*\n" "#+begin_src \\1\n" result))
+          (error (message "Code block start conversion error: %s" (error-message-string sub-err))))
+          
+        (condition-case sub-err
+            (setq result (replace-regexp-in-string "^```\\s-*$" "#+end_src" result))
+          (error (message "Code block end conversion error: %s" (error-message-string sub-err))))
+        
+        ;; Convert inline code
+        (condition-case sub-err
+            (setq result (replace-regexp-in-string "`\\([^`\n]+\\)`" "~\\1~" result))
+          (error (message "Inline code conversion error: %s" (error-message-string sub-err))))
+        
+        ;; Convert block quotes  
+        (condition-case sub-err
+            (setq result (replace-regexp-in-string "^> \\(.+\\)$" "#+begin_quote\n\\1\n#+end_quote" result))
+          (error (message "Block quote conversion error: %s" (error-message-string sub-err))))
+        
+        ;; Convert single asterisk italic *text* to org italic /text/ (but not *[links]*)
+        (condition-case sub-err
+            (setq result (replace-regexp-in-string "\\*\\([^*\n\\[]+\\)\\*" "/\\1/" result))
+          (error (message "Single asterisk italic conversion error: %s" (error-message-string sub-err))))
+        
+        ;; Convert markdown links [text](url) to org links [[url][text]]
+        (condition-case sub-err
+            (setq result (replace-regexp-in-string "\\[\\([^]]+\\)\\](\\([^)]+\\))" "[[\\2][\\1]]" result))
+          (error (message "Markdown link conversion error: %s" (error-message-string sub-err))))
+        
+        result)
+    (error
+     (message "Critical error in content conversion: %s" (error-message-string err))
+     content))) ; Return original content if conversion fails
+
+(defun hp/obsidian-to-org-convert-buffer ()
+  "Convert current Obsidian markdown buffer to org-mode format."
+  (interactive)
+  (unless (derived-mode-p 'markdown-mode)
+    (user-error "Current buffer is not in markdown mode"))
+
+  (let* ((input-file (buffer-file-name))
+         (base-dir (file-name-directory input-file))
+         (file-name (file-name-nondirectory input-file))
+         (org-file-name (concat (file-name-sans-extension file-name) ".org"))
+         (output-dir hp/obsidian-org-output-dir)
+         (output-file (expand-file-name org-file-name output-dir))
+         (content (buffer-string)))
+
+    ;; Create output directory if needed
+    (make-directory output-dir t)
+
+    ;; Convert content
+    (let ((org-content (hp/obsidian-to-org--convert-buffer-content content base-dir output-dir)))
+
+      ;; Write to new file
+      (with-temp-file output-file
+        (insert org-content))
+
+      ;; Open the converted file
+      (find-file output-file)
+      (org-mode)
+      (org-roam-db-update-file)
+
+      (message "Converted %s to %s" file-name output-file))))
+
+(defun hp/obsidian-to-org-convert-directory (directory &optional recursive)
+  "Convert all Obsidian markdown files in DIRECTORY to org-mode.
+If RECURSIVE is non-nil, process subdirectories as well."
+  (interactive "DDirectory: \nP")
+
+  (let* ((md-files (if recursive
+                      (directory-files-recursively directory "\\.md$")
+                    (directory-files directory t "\\.md$")))
+         (total (length md-files))
+         (count 0)
+         (errors '()))
+
+    (dolist (file md-files)
+      (setq count (1+ count))
+      (message "Converting %d/%d: %s" count total (file-name-nondirectory file))
+
+      (condition-case err
+          (with-temp-buffer
+            (insert-file-contents file)
+            (let* ((base-dir (file-name-directory file))
+                   (rel-path (file-relative-name file directory))
+                   (rel-dir (file-name-directory rel-path))
+                   (output-dir (if rel-dir
+                                 (expand-file-name rel-dir hp/obsidian-org-output-dir)
+                               hp/obsidian-org-output-dir))
+                   (org-file-name (concat (file-name-sans-extension
+                                         (file-name-nondirectory file)) ".org"))
+                   (output-file (expand-file-name org-file-name output-dir))
+                   (content (buffer-string)))
+
+              ;; Create output directory structure
+              (make-directory output-dir t)
+
+              ;; Convert and save
+              (let ((org-content (hp/obsidian-to-org--convert-buffer-content
+                                content base-dir output-dir)))
+                (with-temp-file output-file
+                  (insert org-content)))))
+        (error
+         (push (cons file err) errors))))
+
+    ;; Update org-roam database for all new files
+    (org-roam-db-sync)
+
+    ;; Report results
+    (if errors
+        (message "Converted %d files with %d errors. Check *Messages* for details."
+                 (- total (length errors)) (length errors))
+      (message "Successfully converted %d files." total))
+
+    ;; Log errors
+    (dolist (error errors)
+      (message "Error converting %s: %s" (car error) (cdr error)))))
+
+(defun hp/obsidian-to-org--copy-attachments (source-dir dest-dir)
+  "Copy attachment directories from SOURCE-DIR to DEST-DIR."
+  (dolist (attach-dir hp/obsidian-attachment-dirs)
+    (let ((src (expand-file-name attach-dir source-dir))
+          (dst (expand-file-name attach-dir dest-dir)))
+      (when (file-directory-p src)
+        (make-directory (file-name-directory dst) t)
+        (copy-directory src dst t t t)))))
+
+(defvar hp/obsidian-to-org-sync-timer nil
+  "Timer for automatic Obsidian to Org synchronization.")
+
+(defun hp/obsidian-to-org-auto-sync ()
+  "Set up automatic synchronization of Obsidian vault to org-roam."
+  (interactive)
+
+  (when hp/obsidian-to-org-sync-timer
+    (cancel-timer hp/obsidian-to-org-sync-timer))
+
+  (setq hp/obsidian-to-org-sync-timer
+        (run-with-timer
+         300 ; 5 minutes initial delay
+         1800 ; 30 minutes repeat
+         (lambda ()
+           (message "Starting Obsidian to Org sync...")
+           (hp/obsidian-to-org-convert-directory
+            obsidian-directory t)
+           (message "Obsidian to Org sync completed."))))
+
+  (message "Automatic Obsidian to Org sync enabled (every 30 minutes)"))
+
+(defun hp/obsidian-to-org-stop-auto-sync ()
+  "Stop automatic synchronization of Obsidian vault."
+  (interactive)
+  (when hp/obsidian-to-org-sync-timer
+    (cancel-timer hp/obsidian-to-org-sync-timer)
+    (setq hp/obsidian-to-org-sync-timer nil)
+    (message "Automatic Obsidian to Org sync disabled")))
+
+;; Add keybindings for conversion functions
+(map! :leader
+      :prefix "n"
+      (:prefix ("i" . "import")
+       (:prefix ("o" . "obsidian")
+        :desc "Import current buffer" "b" #'hp/obsidian-to-org-convert-buffer
+        :desc "Import directory" "d" #'hp/obsidian-to-org-convert-directory
+        :desc "Start auto sync" "s" #'hp/obsidian-to-org-auto-sync
+        :desc "Stop auto sync" "S" #'hp/obsidian-to-org-stop-auto-sync)))
+#+end_src
 
 (use-package! websocket
   :after org-roam)
