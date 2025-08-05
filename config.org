@@ -1489,59 +1489,101 @@ wikilinks, attachments, and metadata.
 (defvar hp/obsidian-attachment-dirs '("attachments" "Attachments" "assets" "Assets")
   "List of common attachment directory names in Obsidian vaults.")
 
-(defun hp/obsidian-to-org--convert-frontmatter (content)
-  "Convert YAML frontmatter in CONTENT to org properties."
-  (if (string-match "^---\n\\(\\(?:.*\n\\)*?\\)---\n" content)
-      (let* ((frontmatter (match-string 1 content))
-             (body (substring content (match-end 0)))
-             (properties '())
-             (org-content ""))
+(defun hp/obsidian-to-org--extract-data (content)
+  "Extract minimal data from Obsidian CONTENT.
+Returns a plist with :title :tags :created :body."
+  (let ((data '()))
+    (if (string-match "^---\n\\(\\(?:.*\n\\)*?\\)---\n" content)
+        (let* ((frontmatter (match-string 1 content))
+               (body (substring content (match-end 0))))
+          ;; Extract body content - use setq to ensure we update the outer data
+          (setq data (plist-put data :body body))
+          ;; Parse only essential frontmatter fields
+          (with-temp-buffer
+            (insert frontmatter)
+            (goto-char (point-min))
+            (while (re-search-forward "^\\([^:]+\\):\\s-*\\(.+\\)$" nil t)
+              (let* ((key (downcase (match-string 1)))
+                     (value (match-string 2)))
+                ;; Clean up values
+                (setq value (replace-regexp-in-string "^[\"']\\|[\"']$" "" value))
+                (cond
+                 ;; Extract title
+                 ((string= key "title")
+                  (setq data (plist-put data :title value)))
+                 ;; Extract tags - handle both arrays and strings
+                 ((string= key "tags")
+                  (cond
+                   ;; YAML array format: [tag1, tag2]
+                   ((string-match "\\[\\(.+\\)\\]" value)
+                    (let ((tags-str (match-string 1 value)))
+                      (setq tags-str (replace-regexp-in-string "\\s-*,\\s-*" " " tags-str))
+                      (setq tags-str (replace-regexp-in-string "^\\s-*-\\s-*" "" tags-str))
+                      (setq data (plist-put data :tags (split-string tags-str)))))
+                   ;; YAML list format with dashes
+                   ((string-match "^\\s*-\\s*" value)
+                    (setq data (plist-put data :tags (list (replace-regexp-in-string "^\\s*-\\s*" "" value)))))
+                   ;; Simple string
+                   (t (setq data (plist-put data :tags (split-string value))))))
+                 ;; Extract created date
+                 ((member key '("created" "date"))
+                  (setq data (plist-put data :created value))))))))
+      ;; No frontmatter, just use the content as body
+      (setq data (plist-put data :body content)))
+    data))
 
-        ;; Parse YAML frontmatter
-        (with-temp-buffer
-          (insert frontmatter)
-          (goto-char (point-min))
-          (while (re-search-forward "^\\([^:]+\\):\\s-*\\(.+\\)$" nil t)
-            (let ((key (match-string 1))
-                  (value (match-string 2)))
-              ;; Clean up values
-              (setq value (replace-regexp-in-string "^[\"']\\|[\"']$" "" value))
-              ;; Handle YAML arrays properly: [tag1, tag2] -> "tag1 tag2"
-              (when (string-match "\\[\\(.+\\)\\]" value)
-                (setq value (match-string 1 value))
-                (setq value (replace-regexp-in-string ",\\s-*" " " value))
-                (setq value (replace-regexp-in-string "-\\s-*" "" value)))
-              (push (cons (upcase (replace-regexp-in-string "-" "_" key)) value) properties))))
-
-        ;; Build org properties drawer
-        (setq org-content ":PROPERTIES:\n")
-        (setq org-content (concat org-content (format ":ID:       %s\n" (org-id-new))))
-        (dolist (prop (reverse properties))
-          (let ((key (car prop))
-                (value (cdr prop)))
-            (cond
-             ((string= key "TITLE")
-              (setq org-content (concat org-content (format ":ROAM_ALIASES: %s\n" value))))
-             ((string= key "TAGS")
-              (setq org-content (concat org-content (format ":ROAM_TAGS: %s\n"
-                                                           (string-trim (replace-regexp-in-string ",\\s-*" " " value))))))
-             ((member key '("CREATED" "DATE" "LASTMODIFIED" "MODIFIED"))
-              (setq org-content (concat org-content (format ":%s: %s\n" key value))))
-             (t
-              (setq org-content (concat org-content (format ":%s: %s\n" key value)))))))
-        (setq org-content (concat org-content ":END:\n"))
-
-        ;; Add title if present
-        (when-let ((title (cdr (assoc "TITLE" properties))))
-          (setq org-content (concat org-content (format "#+title: %s\n" title))))
-
-        ;; Add filetags
-        (when-let ((tags (cdr (assoc "TAGS" properties))))
-          (let ((cleaned-tags (string-trim (replace-regexp-in-string ",\\s-*" " :" tags))))
-            (setq org-content (concat org-content (format "#+filetags: :%s\n" cleaned-tags)))))
-
-        (concat org-content "\n" body))
-    content))
+(defun hp/obsidian-to-org--rebuild-org-file (data filename)
+  "Rebuild a clean org file from extracted DATA.
+DATA should be a plist with :title :tags :created :body.
+FILENAME is used as fallback for title."
+  (let* ((title (or (plist-get data :title) 
+                    (file-name-sans-extension filename)))
+         (tags (plist-get data :tags))
+         (created (plist-get data :created))
+         (body (or (plist-get data :body) ""))
+         (org-content ""))
+    
+    ;; Build minimal properties drawer with just ID
+    (setq org-content ":PROPERTIES:\n")
+    (setq org-content (concat org-content (format ":ID:       %s\n" (org-id-new))))
+    (setq org-content (concat org-content ":END:\n"))
+    
+    ;; Add title with inline tags if present
+    (if (and tags (listp tags) (> (length tags) 0))
+        (let* ((valid-tags (seq-filter (lambda (tag) (and tag (stringp tag))) tags))
+               (tag-string (when valid-tags
+                            (mapconcat (lambda (tag) 
+                                        (concat ":" (replace-regexp-in-string "\\s-+" "" tag) ":"))
+                                      valid-tags " "))))
+          (if (and tag-string (not (string-empty-p tag-string)))
+              (setq org-content (concat org-content (format "#+title: %s %s\n" title tag-string)))
+            (setq org-content (concat org-content (format "#+title: %s\n" title)))))
+      (setq org-content (concat org-content (format "#+title: %s\n" title))))
+    
+    ;; Add created date if present
+    (when (and created (stringp created))
+      (let ((date-str (if (string-match "\\([0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}\\)" created)
+                         (match-string 1 created)
+                       created)))
+        (setq org-content (concat org-content (format "#+created: [%s]\n" date-str)))))
+    
+    ;; Add filetags if present
+    (when (and tags (listp tags) (> (length tags) 0))
+      (let* ((valid-tags (seq-filter (lambda (tag) (and tag (stringp tag))) tags))
+             (filetags (when valid-tags
+                        (string-join (mapcar (lambda (tag) 
+                                              (replace-regexp-in-string "\\s-+" "" tag))
+                                            valid-tags) " "))))
+        (when (and filetags (not (string-empty-p filetags)))
+          (setq org-content (concat org-content (format "#+filetags: %s\n" filetags))))))
+    
+    ;; Add startup directive
+    (setq org-content (concat org-content "#+startup: overview\n\n"))
+    
+    ;; Add body content
+    (setq org-content (concat org-content body))
+    
+    org-content))
 
 (defun hp/obsidian-to-org--convert-wikilinks (content)
   "Convert Obsidian wikilinks in CONTENT to org links."
@@ -1624,93 +1666,99 @@ BASE-DIR is the source directory, OUTPUT-DIR is the destination."
                 content))
   content)
 
-(defun hp/obsidian-to-org--convert-buffer-content (content base-dir output-dir)
-  "Convert Obsidian markdown CONTENT to org format.
+(defun hp/obsidian-to-org--process-body-content (body base-dir output-dir)
+  "Process BODY content converting markdown syntax to org.
 BASE-DIR is the source directory, OUTPUT-DIR is the destination."
-  (condition-case err
-      (let ((result content))
-        ;; Apply conversions step by step with error handling
-        (condition-case sub-err
-            (setq result (hp/obsidian-to-org--convert-frontmatter result))
-          (error (message "Frontmatter conversion error: %s" (error-message-string sub-err))))
-        
-        (condition-case sub-err
+  (if (not (stringp body))
+      ""  ; Return empty string if body is not a string
+    (let ((result body))
+      (condition-case err
+          (progn
+            ;; Convert wikilinks
             (setq result (hp/obsidian-to-org--convert-wikilinks result))
-          (error (message "Wikilinks conversion error: %s" (error-message-string sub-err))))
-        
-        (condition-case sub-err
+            
+            ;; Convert image embeds
             (setq result (hp/obsidian-to-org--convert-image-embeds result base-dir output-dir))
-          (error (message "Image conversion error: %s" (error-message-string sub-err))))
-        
-        (condition-case sub-err
-            (setq result (hp/obsidian-to-org--convert-tags result))
-          (error (message "Tags conversion error: %s" (error-message-string sub-err))))
-        
-        ;; Text formatting conversions with fixed regexes
-        (condition-case sub-err
+            
             ;; Convert markdown headers to org headers: # Header → * Header
-            ;; But NOT org directives like #+title: or #+filetags:
             (setq result (replace-regexp-in-string "^\\(#+\\)\\s-*\\([^+:].+\\)$" 
-                                                   (lambda (match)
-                                                     (let ((hashes (match-string 1 match))
-                                                           (content (match-string 2 match)))
-                                                       (concat (make-string (length hashes) ?*) " " content)))
-                                                   result))
-          (error (message "Headers conversion error: %s" (error-message-string sub-err))))
-        
-        (condition-case sub-err
+                                                  (lambda (match)
+                                                    (let ((hashes (match-string 1 match))
+                                                          (content (match-string 2 match)))
+                                                      (concat (make-string (length hashes) ?*) " " content)))
+                                                  result))
+            
+            ;; Convert text formatting
             (setq result (replace-regexp-in-string "\\*\\*\\([^*\n]+\\)\\*\\*" "*\\1*" result))
-          (error (message "Bold conversion error: %s" (error-message-string sub-err))))
-        
-        (condition-case sub-err
             (setq result (replace-regexp-in-string "__\\([^_\n]+\\)__" "*\\1*" result))
-          (error (message "Bold alt conversion error: %s" (error-message-string sub-err))))
-        
-        (condition-case sub-err
             (setq result (replace-regexp-in-string "\\b_\\([^_\n]+\\)_\\b" "/\\1/" result))
-          (error (message "Italic conversion error: %s" (error-message-string sub-err))))
-        
-        (condition-case sub-err
             (setq result (replace-regexp-in-string "~~\\([^~\n]+\\)~~" "+\\1+" result))
-          (error (message "Strikethrough conversion error: %s" (error-message-string sub-err))))
-        
-        (condition-case sub-err
             (setq result (replace-regexp-in-string "==\\([^=\n]+\\)==" "@@html:<mark>@@\\1@@html:</mark>@@" result))
-          (error (message "Highlight conversion error: %s" (error-message-string sub-err))))
-        
-        ;; Convert code blocks
-        (condition-case sub-err
+            
+            ;; Convert code blocks
             (setq result (replace-regexp-in-string "```\\([a-zA-Z0-9-_+]*\\)\\s-*\n" "#+begin_src \\1\n" result))
-          (error (message "Code block start conversion error: %s" (error-message-string sub-err))))
-          
-        (condition-case sub-err
             (setq result (replace-regexp-in-string "^```\\s-*$" "#+end_src" result))
-          (error (message "Code block end conversion error: %s" (error-message-string sub-err))))
-        
-        ;; Convert inline code
-        (condition-case sub-err
+            
+            ;; Convert inline code
             (setq result (replace-regexp-in-string "`\\([^`\n]+\\)`" "~\\1~" result))
-          (error (message "Inline code conversion error: %s" (error-message-string sub-err))))
-        
-        ;; Convert block quotes  
-        (condition-case sub-err
+            
+            ;; Convert block quotes
             (setq result (replace-regexp-in-string "^> \\(.+\\)$" "#+begin_quote\n\\1\n#+end_quote" result))
-          (error (message "Block quote conversion error: %s" (error-message-string sub-err))))
-        
-        ;; Convert single asterisk italic *text* to org italic /text/ (but not *[links]*)
-        (condition-case sub-err
+            
+            ;; Convert single asterisk italic
             (setq result (replace-regexp-in-string "\\*\\([^*\n\\[]+\\)\\*" "/\\1/" result))
-          (error (message "Single asterisk italic conversion error: %s" (error-message-string sub-err))))
-        
-        ;; Convert markdown links [text](url) to org links [[url][text]]
-        (condition-case sub-err
+            
+            ;; Convert markdown links
             (setq result (replace-regexp-in-string "\\[\\([^]]+\\)\\](\\([^)]+\\))" "[[\\2][\\1]]" result))
-          (error (message "Markdown link conversion error: %s" (error-message-string sub-err))))
+            
+            result)
+        (error
+         (message "Error processing body content: %s" (error-message-string err))
+         body)))))
+
+(defun hp/obsidian-to-org-convert-file (file)
+  "Convert a single Obsidian FILE to org-mode format."
+  (interactive "fSelect Obsidian file to convert: ")
+  (let* ((base-dir (file-name-directory file))
+         (file-name (file-name-nondirectory file))
+         (org-file-name (concat (file-name-sans-extension file-name) ".org"))
+         (output-dir hp/obsidian-org-output-dir)
+         (output-file (expand-file-name org-file-name output-dir)))
+    
+    ;; Read file content
+    (with-temp-buffer
+      (insert-file-contents file)
+      (let* ((content (buffer-string))
+             ;; Extract data from Obsidian file
+             (data (hp/obsidian-to-org--extract-data content))
+             (body (plist-get data :body))
+             ;; Process body content for markdown->org conversions
+             (processed-body (hp/obsidian-to-org--process-body-content 
+                             body base-dir output-dir))
+             ;; Update data with processed body
+             (updated-data (plist-put (copy-sequence data) :body processed-body))
+             ;; Rebuild clean org file
+             (org-content (hp/obsidian-to-org--rebuild-org-file updated-data file-name)))
         
-        result)
-    (error
-     (message "Critical error in content conversion: %s" (error-message-string err))
-     content))) ; Return original content if conversion fails
+        ;; Debug logging
+        (message "Debug: Original body length: %s" (if body (length body) "nil"))
+        (message "Debug: Processed body length: %s" (if processed-body (length processed-body) "nil"))
+        (message "Debug: Final org content length: %s" (length org-content))
+        
+        ;; Create output directory if needed
+        (make-directory output-dir t)
+        
+        ;; Write to new file
+        (with-temp-file output-file
+          (insert org-content))
+        
+        ;; Open the converted file
+        (find-file output-file)
+        (org-mode)
+        ;; Force a single database update
+        (org-roam-db-update-file)
+        
+        (message "Converted %s to %s" file-name output-file)))))
 
 (defun hp/obsidian-to-org-convert-buffer ()
   "Convert current Obsidian markdown buffer to org-mode format."
@@ -1729,9 +1777,17 @@ BASE-DIR is the source directory, OUTPUT-DIR is the destination."
     ;; Create output directory if needed
     (make-directory output-dir t)
 
-    ;; Convert content
-    (let ((org-content (hp/obsidian-to-org--convert-buffer-content content base-dir output-dir)))
-
+    ;; Extract data from Obsidian file
+    (let* ((data (hp/obsidian-to-org--extract-data content))
+           (body (plist-get data :body))
+           ;; Process body content for markdown->org conversions
+           (processed-body (hp/obsidian-to-org--process-body-content 
+                           body base-dir output-dir))
+           ;; Update data with processed body
+           (updated-data (plist-put (copy-sequence data) :body processed-body))
+           ;; Rebuild clean org file
+           (org-content (hp/obsidian-to-org--rebuild-org-file updated-data file-name)))
+      
       ;; Write to new file
       (with-temp-file output-file
         (insert org-content))
@@ -1739,6 +1795,7 @@ BASE-DIR is the source directory, OUTPUT-DIR is the destination."
       ;; Open the converted file
       (find-file output-file)
       (org-mode)
+      ;; Force a single database update
       (org-roam-db-update-file)
 
       (message "Converted %s to %s" file-name output-file))))
@@ -1776,9 +1833,17 @@ If RECURSIVE is non-nil, process subdirectories as well."
               ;; Create output directory structure
               (make-directory output-dir t)
 
-              ;; Convert and save
-              (let ((org-content (hp/obsidian-to-org--convert-buffer-content
-                                content base-dir output-dir)))
+              ;; Extract data and rebuild org file
+              (let* ((data (hp/obsidian-to-org--extract-data content))
+                     (body (plist-get data :body))
+                     ;; Process body content for markdown->org conversions
+                     (processed-body (hp/obsidian-to-org--process-body-content 
+                                     body base-dir output-dir))
+                     ;; Update data with processed body
+                     (updated-data (plist-put (copy-sequence data) :body processed-body))
+                     ;; Rebuild clean org file
+                     (org-content (hp/obsidian-to-org--rebuild-org-file 
+                                  updated-data (file-name-nondirectory file))))
                 (with-temp-file output-file
                   (insert org-content)))))
         (error
@@ -1842,6 +1907,7 @@ If RECURSIVE is non-nil, process subdirectories as well."
       (:prefix ("i" . "import")
        (:prefix ("o" . "obsidian")
         :desc "Import current buffer" "b" #'hp/obsidian-to-org-convert-buffer
+        :desc "Import single file" "f" #'hp/obsidian-to-org-convert-file
         :desc "Import directory" "d" #'hp/obsidian-to-org-convert-directory
         :desc "Start auto sync" "s" #'hp/obsidian-to-org-auto-sync
         :desc "Stop auto sync" "S" #'hp/obsidian-to-org-stop-auto-sync)))
