@@ -1127,6 +1127,58 @@
                                  'nerd-icons-red
                                'mode-line-inactive))))
 
+(defun hp/org-roam-calculate-similarity (node-id-1 node-id-2)
+  "Calculate similarity between two nodes based on shared links and tags."
+  (let* ((node1 (org-roam-node-from-id node-id-1))
+         (node2 (org-roam-node-from-id node-id-2))
+         (tags1 (org-roam-node-tags node1))
+         (tags2 (org-roam-node-tags node2))
+         (shared-tags (seq-intersection tags1 tags2))
+         (tag-similarity (if (or (null tags1) (null tags2))
+                            0.0
+                          (/ (float (length shared-tags))
+                             (length (seq-uniq (append tags1 tags2))))))
+         ;; Get backlinks for both nodes
+         (backlinks1 (org-roam-db-query
+                     [:select [source]
+                      :from links
+                      :where (= dest $s1)]
+                     node-id-1))
+         (backlinks2 (org-roam-db-query
+                     [:select [source]
+                      :from links
+                      :where (= dest $s1)]
+                     node-id-2))
+         (shared-backlinks (seq-intersection (mapcar #'car backlinks1)
+                                           (mapcar #'car backlinks2)))
+         (backlink-similarity (if (and backlinks1 backlinks2)
+                                 (/ (float (length shared-backlinks))
+                                    (length (seq-uniq (append (mapcar #'car backlinks1)
+                                                            (mapcar #'car backlinks2)))))
+                               0.0))
+         ;; Get forward links
+         (links1 (org-roam-db-query
+                 [:select [dest]
+                  :from links
+                  :where (= source $s1)]
+                 node-id-1))
+         (links2 (org-roam-db-query
+                 [:select [dest]
+                  :from links
+                  :where (= source $s1)]
+                 node-id-2))
+         (shared-links (seq-intersection (mapcar #'car links1)
+                                       (mapcar #'car links2)))
+         (link-similarity (if (and links1 links2)
+                             (/ (float (length shared-links))
+                                (length (seq-uniq (append (mapcar #'car links1)
+                                                        (mapcar #'car links2)))))
+                           0.0)))
+    ;; Weighted average of similarities
+    (+ (* 0.4 tag-similarity)
+       (* 0.3 backlink-similarity)
+       (* 0.3 link-similarity))))
+
 (defun hp/org-roam-find-similar-nodes ()
   "Find nodes similar to the current node based on content and connections."
   (interactive)
@@ -1203,6 +1255,10 @@
         (org-mode)
         (goto-char (point-min)))
       (pop-to-buffer buffer))))
+
+;; Hash table to store tag frequency weights
+(defvar hp/org-roam-tag-weights (make-hash-table :test 'equal)
+  "Hash table storing tag frequencies for clustering.")
 
 (defun hp/org-roam-update-tag-weights ()
   "Update tag frequency weights for better clustering."
@@ -3144,119 +3200,5 @@ This function is meant to clean out empty org-roam-dailies files."
         :map matlab-shell-mode-map
         :i "C-c C-z" #'other-window))
 
-(use-package! elfeed
-  :commands (elfeed)
-  :custom
-  (rmh-elfeed-org-files (list (concat org-directory "/Feeds/elfeed.org")))
-  (elfeed-db-directory (concat org-directory "/Feeds/elfeed.db/"))
-  (elfeed-goodies/wide-threshold 0.2)
-  (map! :leader
-        :prefix "e"
-          :desc "efleed" "e" #'elfeed)
-  :config
-  ;; (defun hp/elfeed-entry-line-draw (entry)
-  ;;   (insert (format "%s" (elfeed-meta--plist entry))))
-  (defun hp/elfeed-entry-line-draw (entry)
-    "Print ENTRY to the buffer."
-    (let* ((date (elfeed-search-format-date (elfeed-entry-date entry)))
-           (title (or (elfeed-meta entry :title) (elfeed-entry-title entry) ""))
-           (title-faces (elfeed-search--faces (elfeed-entry-tags entry)))
-           (feed (elfeed-entry-feed entry))
-           (feed-title
-            (when feed
-              (or (elfeed-meta feed :title) (elfeed-feed-title feed))))
-           (tags (mapcar #'symbol-name (elfeed-entry-tags entry)))
-           (tags-str (concat "[" (mapconcat 'identity tags ",") "]"))
-           (title-width (- (window-width) elfeed-goodies/feed-source-column-width
-                           elfeed-goodies/tag-column-width 4))
-           (title-column (elfeed-format-column
-                          title (elfeed-clamp
-                                 elfeed-search-title-min-width
-                                 title-width
-                                 title-width)
-                          :left))
-           (tag-column (elfeed-format-column
-                        tags-str (elfeed-clamp (length tags-str)
-                                               elfeed-goodies/tag-column-width
-                                               elfeed-goodies/tag-column-width)
-                        :left))
-           (feed-column (elfeed-format-column
-                         feed-title (elfeed-clamp elfeed-goodies/feed-source-column-width
-                                                  elfeed-goodies/feed-source-column-width
-                                                  elfeed-goodies/feed-source-column-width)
-                         :left))
-           (entry-score (elfeed-format-column (number-to-string (elfeed-score-scoring-get-score-from-entry entry)) 6 :left))
-           ;; (entry-authors (concatenate-authors
-           ;;                 (elfeed-meta entry :authors)))
-           ;; (authors-column (elfeed-format-column entry-authors elfeed-goodies/tag-column-width :left))
-           )
-      (if (>= (window-width) (* (frame-width) elfeed-goodies/wide-threshold))
-          (progn
-            (insert (propertize entry-score 'face 'elfeed-search-feed-face) " ")
-            (insert (propertize date 'face 'elfeed-search-date-face) " ")
-            (insert (propertize feed-column 'face 'elfeed-search-feed-face) " ")
-            (insert (propertize tag-column 'face 'elfeed-search-tag-face) " ")
-            ;; (insert (propertize authors-column 'face 'elfeed-search-tag-face) " ")
-            (insert (propertize title 'face title-faces 'kbd-help title))
-            )
-        (insert (propertize title 'face title-faces 'kbd-help title)))))
-
-  (defun concatenate-authors (authors-list)
-    "Given AUTHORS-LIST, list of plists; return string of all authors concatenated."
-    (if (> (length authors-list) 1)
-        (format "%s et al." (plist-get (nth 0 authors-list) :name))
-      (plist-get (nth 0 authors-list) :name)))
-
-  (defun search-header/draw-wide (separator-left separator-right search-filter stats db-time)
-    (let* ((update (format-time-string "%Y-%m-%d %H:%M:%S %z" db-time))
-           (lhs (list
-                 (powerline-raw (-pad-string-to "Score" (- 5 5)) 'powerline-active1 'l)
-                 (funcall separator-left 'powerline-active1 'powerline-active2)
-                 (powerline-raw (-pad-string-to "Date" (- 9 4)) 'powerline-active2 'l)
-                 (funcall separator-left 'powerline-active2 'powerline-active1)
-                 (powerline-raw (-pad-string-to "Feed" (- elfeed-goodies/feed-source-column-width 4)) 'powerline-active1 'l)
-                 (funcall separator-left 'powerline-active1 'powerline-active2)
-                 (powerline-raw (-pad-string-to "Tags" (- elfeed-goodies/tag-column-width 6)) 'powerline-active2 'l)
-                 (funcall separator-left 'powerline-active2 'mode-line)
-                 (powerline-raw "Subject" 'mode-line 'l)))
-           (rhs (search-header/rhs separator-left separator-right search-filter stats update)))
-      (concat (powerline-render lhs)
-              (powerline-fill 'mode-line (powerline-width rhs))
-              (powerline-render rhs))))
-
-  ;; Tag entry as read when open
-  (defadvice! hp/mark-read (&rest _)
-    :before 'elfeed-search-show-entry
-    :before 'elfeed-search-browse-url
-    (let* ((offset (- (line-number-at-pos) elfeed-search--offset))
-           (current-entry (nth offset elfeed-search-entries)))
-      (elfeed-tag-1 current-entry 'read)))
-
-  ;; Faces for diferent kinds of feeds
-  (defface hp/elfeed-blog
-    `((t :foreground ,(doom-color 'blue)))
-    "Marks a Elfeed blog.")
-  (push '(blog hp/elfeed-blog)
-        elfeed-search-face-alist)
-  (push '(read elfeed-search-title-face)
-        elfeed-search-face-alist)
-
-  ;; Variables
-  (setq elfeed-search-print-entry-function 'hp/elfeed-entry-line-draw
-        elfeed-search-filter "@8-weeks-ago -bury "))
-
-(use-package! elfeed-score
-  :after elfeed
-  :custom
-  (elfeed-score-score-file (concat org-directory "/Feeds/elfeed.score"))
-  :config
-  (map! :map elfeed-search-mode-map
-        :n "=" elfeed-score-map)
-  (elfeed-score-enable))
-
-(after! (elfeed)
-  (defadvice! hp/elfeed-in-own-workspace (&rest _)
-  "Open Elfeeds in its own workspace."
-  :before #'elfeed
-  (when (modulep! :ui workspaces)
-    (+workspace-switch "Elfeeds" t))))
+;; Load elfeed configuration
+(load! "elfeed-config")
