@@ -1705,8 +1705,8 @@ BASE-DIR is the source directory, OUTPUT-DIR is the destination."
             ;; Convert block quotes
             (setq result (replace-regexp-in-string "^> \\(.+\\)$" "#+begin_quote\n\\1\n#+end_quote" result))
             
-            ;; Convert single asterisk italic
-            (setq result (replace-regexp-in-string "\\*\\([^*\n\\[]+\\)\\*" "/\\1/" result))
+            ;; Convert single asterisk italic  
+            (setq result (replace-regexp-in-string "\\*\\([^*\n]+?\\)\\*" "/\\1/" result))
             
             ;; Convert markdown links
             (setq result (replace-regexp-in-string "\\[\\([^]]+\\)\\](\\([^)]+\\))" "[[\\2][\\1]]" result))
@@ -2121,7 +2121,7 @@ If RECURSIVE is non-nil, process subdirectories as well."
                     (org-roam-db-update-file))))
               (message "Cannot rename: No title found in %s" filename)))
         (error
-         (message "Error renaming %s: %s" filename (error-message-string err)))))))
+         (message "Error renaming %s: %s" filename (error-message-string err))))))
 
 (defun hp/obsidian-to-org--copy-attachments (source-dir dest-dir)
   "Copy attachment directories from SOURCE-DIR to DEST-DIR."
@@ -2841,7 +2841,3 @@ Like Org-roam, Elfeed should be opened in it's own workspace:
   (when (modulep! :ui workspaces)
     (+workspace-switch "Elfeeds" t))))
 #+end_src
-
-* Footnotes
-
-[fn:1] For example, this is a footnote. But on website this should be rendered beside main text (as sidenotes).
