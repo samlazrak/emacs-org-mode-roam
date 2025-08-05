@@ -34,6 +34,10 @@
 
 (setq org-directory "~/org/")
 
+;; Add org-roam tools to PATH
+(setenv "PATH" (concat (expand-file-name "~/org/roam/tools/bin") ":" (getenv "PATH")))
+(add-to-list 'exec-path (expand-file-name "~/org/roam/tools/bin"))
+
 ;; Use POSIX shell for internal Emacs processes to avoid issues with non-POSIX shells
 ;;(setq shell-file-name (executable-find "bash"))
 
@@ -1006,6 +1010,24 @@ TODO abstract backend implementations."
 
 (advice-add 'org-roam-node-find :override #'org-roam-node-find-by-mtime)
 
+(defun hp/org-roam-rename-files ()
+  "Run the org-roam rename tool and refresh the database."
+  (interactive)
+  (let ((default-directory org-roam-directory))
+    (message "Running org-roam rename tool...")
+    (shell-command "rename")
+    (org-roam-db-sync)
+    (message "Org-roam rename completed and database synced.")))
+
+(defun hp/org-roam-flatten-files ()
+  "Run the org-roam flatten tool and refresh the database."
+  (interactive)
+  (let ((default-directory org-roam-directory))
+    (message "Running org-roam flatten tool...")
+    (shell-command "flatten")
+    (org-roam-db-sync)
+    (message "Org-roam flatten completed and database synced.")))
+
 (use-package! org-roam-capture
   :config
   (setq org-roam-capture-templates
@@ -1047,6 +1069,13 @@ TODO abstract backend implementations."
          :desc "Obsidian specify path" "p" #'obsidian-specify-path
          :desc "Open vault with treemacs" "V" #'hp/obsidian-open-vault-with-treemacs))
 
+;; Org-roam tools keybindings
+(map! :leader
+        :prefix "n"
+        (:prefix ("r" . "roam")
+         (:prefix ("t" . "tools")
+          :desc "Rename roam files" "r" #'hp/org-roam-rename-files
+          :desc "Flatten roam files" "f" #'hp/org-roam-flatten-files)))
 
 ;; Custom function to open Obsidian vault with treemacs
 (defun hp/obsidian-open-vault-with-treemacs ()
