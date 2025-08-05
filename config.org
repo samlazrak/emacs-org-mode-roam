@@ -2,22 +2,23 @@
 :ID:       21f80d7d-00f7-4959-9ea2-d7e4b680b272
 :END:
 #+title: My Doom Emacs configuration
+#+PROPERTY: header-args:emacs-lisp :tangle config.el
 #+startup: hideblocks content
 #+filetags: :compilation:tool:blogs:
 #+date: {{{modification-time(%Y-%m-%d)}}}
 #+export_file_name: Doom-Emacs-config.md
 #+options: toc:5 num:t H:5
 
-* Bash Shell:
-** For Emacs
-#+begin_src emacs-lisp
-(setq shell-file-name (executable-find
-      "bash"))
-(setq-default vterm-shell
-      "/opt/homebrew/bin/fish")
-(setq-default explicit-shell-file-name
-      "/opt/homebrew/bin/fish")
-#+end_src
+;;* Bash Shell:
+;;** For Emacs
+;;#+begin_src emacs-lisp
+;;(setq shell-file-name (executable-find
+;;      "bash"))
+;;(setq-default vterm-shell
+;;      "/opt/homebrew/bin/fish")
+;;(setq-default explicit-shell-file-name
+;;      "/opt/homebrew/bin/fish")
+;;#+end_src
 * Prerequisites
 ** Reproducible information
 This configuration is continuingly being improved.
@@ -61,7 +62,6 @@ system-configuration-features
 ;; clients, file templates and snippets.
 (setq user-full-name "Sam Lazrak"
       user-mail-address "24284329+samlazrak@users.noreply.github.com"
-      ;;default-input-method 'vietnamese-telex
       +doom-dashboard-banner-dir doom-user-dir
       +doom-dashboard-banner-file "emacse.svg"
       +doom-dashboard-banner-size 400
@@ -1427,6 +1427,695 @@ Sorting =org-roam-node-find= by last modified time seems the most intuitive for 
     (message "Org-roam flatten completed and database synced.")))
 #+end_src
 
+***** Semantic Link Types & Relationship Tracking
+
+#+begin_src emacs-lisp
+;; Define semantic link types for org-roam relationships
+(defvar hp/org-roam-link-types
+  '(("defines" . "🔗")
+    ("explains" . "📝") 
+    ("contradicts" . "❌")
+    ("supports" . "✅")
+    ("extends" . "⬆️")
+    ("implements" . "🔧")
+    ("references" . "📎")
+    ("questions" . "❓")
+    ("relates" . "🔄")
+    ("precedes" . "⏮️")
+    ("follows" . "⏭️")
+    ("contains" . "📦")
+    ("part-of" . "🧩")
+    ("uses" . "🔨")
+    ("depends-on" . "⚙️"))
+  "Semantic link types for org-roam relationships with their display icons.")
+
+(defvar hp/org-roam-relationship-colors
+  '(("defines" . "#4CAF50")
+    ("explains" . "#2196F3")
+    ("contradicts" . "#F44336")
+    ("supports" . "#8BC34A")
+    ("extends" . "#FF9800")
+    ("implements" . "#9C27B0")
+    ("references" . "#795548")
+    ("questions" . "#FFC107")
+    ("relates" . "#607D8B")
+    ("precedes" . "#E91E63")
+    ("follows" . "#3F51B5")
+    ("contains" . "#009688")
+    ("part-of" . "#CDDC39")
+    ("uses" . "#FF5722")
+    ("depends-on" . "#9E9E9E"))
+  "Colors for different relationship types.")
+
+(defun hp/org-roam-insert-semantic-link ()
+  "Insert a semantic link with relationship type."
+  (interactive)
+  (let* ((link-type (completing-read "Relationship type: " 
+                                    (mapcar #'car hp/org-roam-link-types)))
+         (node (org-roam-node-read))
+         (link-icon (cdr (assoc link-type hp/org-roam-link-types)))
+         (link-text (format "%s [[id:%s][%s]]"
+                           link-icon
+                           (org-roam-node-id node)
+                           (org-roam-node-title node))))
+    (insert link-text)
+    ;; Store the relationship metadata
+    (hp/org-roam-store-relationship link-type (org-roam-node-id node))))
+
+(defun hp/org-roam-store-relationship (relationship-type target-id)
+  "Store relationship metadata in current buffer."
+  (save-excursion
+    (goto-char (point-min))
+    (let ((current-relationships (org-entry-get-multivalued-property (point) "RELATIONSHIPS")))
+      (unless (member (format "%s:%s" relationship-type target-id) current-relationships)
+        (org-entry-add-to-multivalued-property 
+         (point) "RELATIONSHIPS" (format "%s:%s" relationship-type target-id))))))
+
+(defun hp/org-roam-get-relationship-stats ()
+  "Get statistics about relationships in current buffer."
+  (interactive)
+  (let ((relationships (org-entry-get-multivalued-property (point-min) "RELATIONSHIPS"))
+        (stats (make-hash-table :test 'equal)))
+    (dolist (rel relationships)
+      (when (string-match "\\([^:]+\\):" rel)
+        (let ((type (match-string 1 rel)))
+          (puthash type (1+ (gethash type stats 0)) stats))))
+    (message "Relationship stats: %s" 
+             (mapconcat (lambda (key) (format "%s: %d" key (gethash key stats)))
+                       (hash-table-keys stats) ", "))))
+
+(defun hp/org-roam-show-relationship-graph ()
+  "Show a visual representation of relationships for current node."
+  (interactive)
+  (when-let ((current-node (org-roam-node-at-point)))
+    (let ((relationships (org-entry-get-multivalued-property (point-min) "RELATIONSHIPS"))
+          (buffer (get-buffer-create "*Org-Roam Relationships*")))
+      (with-current-buffer buffer
+        (erase-buffer)
+        (insert (format "# Relationships for: %s\n\n" (org-roam-node-title current-node)))
+        (dolist (rel relationships)
+          (when (string-match "\\([^:]+\\):\\(.+\\)" rel)
+            (let* ((type (match-string 1 rel))
+                   (target-id (match-string 2 rel))
+                   (target-node (org-roam-node-from-id target-id))
+                   (icon (cdr (assoc type hp/org-roam-link-types))))
+              (when target-node
+                (insert (format "%s *%s* → [[id:%s][%s]]\n"
+                               (or icon "🔗") type target-id 
+                               (org-roam-node-title target-node)))))))
+        (org-mode)
+        (goto-char (point-min)))
+      (pop-to-buffer buffer))))
+
+(defun hp/org-roam-find-by-relationship ()
+  "Find nodes by relationship type."
+  (interactive)
+  (let* ((relationship-type (completing-read "Relationship type: " 
+                                            (mapcar #'car hp/org-roam-link-types)))
+         (nodes-with-relationships
+          (org-roam-db-query
+           "SELECT nodes.id, nodes.title, nodes.file 
+            FROM nodes
+            JOIN files ON nodes.file = files.file
+            WHERE nodes.properties LIKE ?"
+           (format "%%RELATIONSHIPS%%:%s:%%" relationship-type))))
+    (if nodes-with-relationships
+        (let* ((node-choices (mapcar (lambda (node)
+                                      (cons (format "%s (%s)" (nth 1 node) (file-name-base (nth 2 node)))
+                                            (nth 0 node)))
+                                    nodes-with-relationships))
+               (selected (completing-read "Select node: " node-choices))
+               (node-id (cdr (assoc selected node-choices))))
+          (org-roam-node-visit (org-roam-node-from-id node-id)))
+      (message "No nodes found with relationship type: %s" relationship-type))))
+#+end_src
+
+***** Smart Note Clustering & Auto-Tagging System
+
+#+begin_src emacs-lisp
+;; Smart clustering and auto-tagging system for org-roam
+(defvar hp/org-roam-clustering-keywords
+  '(("technical" . ("algorithm" "code" "programming" "software" "system" "implementation" "development" "api" "framework" "library"))
+    ("research" . ("study" "analysis" "hypothesis" "experiment" "findings" "methodology" "literature" "review" "survey" "investigation"))
+    ("academic" . ("paper" "journal" "conference" "publication" "citation" "author" "abstract" "introduction" "conclusion" "methodology"))
+    ("project" . ("milestone" "deadline" "task" "goal" "objective" "requirement" "specification" "deliverable" "sprint" "backlog"))
+    ("concept" . ("definition" "theory" "principle" "concept" "idea" "notion" "framework" "model" "paradigm" "approach"))
+    ("data" . ("dataset" "analysis" "visualization" "statistics" "metrics" "measurement" "observation" "sample" "population" "variable"))
+    ("personal" . ("reflection" "thought" "idea" "opinion" "experience" "learning" "insight" "discovery" "realization" "understanding")))
+  "Keywords for automatic clustering and tagging.")
+
+(defvar hp/org-roam-tag-weights
+  (make-hash-table :test 'equal)
+  "Hash table to store tag frequency weights for clustering.")
+
+(defun hp/org-roam-extract-content-keywords (content)
+  "Extract keywords from content for clustering analysis."
+  (let ((words (split-string (downcase content) "[^a-zA-Z0-9]+" t))
+        (keywords '()))
+    (dolist (word words)
+      (when (> (length word) 3)  ; Filter out short words
+        (push word keywords)))
+    keywords))
+
+(defun hp/org-roam-calculate-similarity (node1-id node2-id)
+  "Calculate similarity score between two nodes based on content and tags."
+  (let* ((node1 (org-roam-node-from-id node1-id))
+         (node2 (org-roam-node-from-id node2-id))
+         (content1 (with-temp-buffer
+                     (insert-file-contents (org-roam-node-file node1))
+                     (buffer-string)))
+         (content2 (with-temp-buffer
+                     (insert-file-contents (org-roam-node-file node2))
+                     (buffer-string)))
+         (keywords1 (hp/org-roam-extract-content-keywords content1))
+         (keywords2 (hp/org-roam-extract-content-keywords content2))
+         (tags1 (org-roam-node-tags node1))
+         (tags2 (org-roam-node-tags node2))
+         (common-keywords (seq-intersection keywords1 keywords2))
+         (common-tags (seq-intersection tags1 tags2))
+         (total-keywords (+ (length keywords1) (length keywords2)))
+         (total-tags (+ (length tags1) (length tags2))))
+    (+ (* 0.7 (if (> total-keywords 0)
+                  (/ (* 2.0 (length common-keywords)) total-keywords)
+                0))
+       (* 0.3 (if (> total-tags 0)
+                  (/ (* 2.0 (length common-tags)) total-tags)
+                0)))))
+
+(defun hp/org-roam-suggest-tags (content)
+  "Suggest tags based on content analysis."
+  (let ((keywords (hp/org-roam-extract-content-keywords content))
+        (suggested-tags '()))
+    (dolist (category hp/org-roam-clustering-keywords)
+      (let ((category-name (car category))
+            (category-keywords (cdr category))
+            (matches 0))
+        (dolist (keyword keywords)
+          (when (member keyword category-keywords)
+            (setq matches (1+ matches))))
+        (when (> matches 1)  ; Require at least 2 keyword matches
+          (push category-name suggested-tags))))
+    suggested-tags))
+
+(defun hp/org-roam-auto-tag-current-node ()
+  "Automatically suggest and apply tags to current node."
+  (interactive)
+  (when-let ((node (org-roam-node-at-point)))
+    (let* ((content (buffer-string))
+           (suggested-tags (hp/org-roam-suggest-tags content))
+           (current-tags (org-roam-node-tags node))
+           (new-tags (seq-difference suggested-tags current-tags)))
+      (if new-tags
+          (progn
+            (when (y-or-n-p (format "Add suggested tags: %s? " (string-join new-tags ", ")))
+              (save-excursion
+                (goto-char (point-min))
+                (if (re-search-forward "^#\\+filetags:" nil t)
+                    (progn
+                      (end-of-line)
+                      (dolist (tag new-tags)
+                        (insert (format " %s" tag))))
+                  (progn
+                    (goto-char (point-min))
+                    (when (re-search-forward "^#\\+title:" nil t)
+                      (end-of-line)
+                      (insert (format "\n#+filetags: %s" (string-join new-tags " ")))))))
+              (org-roam-db-sync)
+              (message "Added tags: %s" (string-join new-tags ", "))))
+        (message "No new tags suggested for this node")))))
+
+(defun hp/org-roam-find-similar-nodes (&optional threshold)
+  "Find nodes similar to current node."
+  (interactive)
+  (setq threshold (or threshold 0.3))
+  (when-let ((current-node (org-roam-node-at-point)))
+    (let* ((current-id (org-roam-node-id current-node))
+           (all-nodes (org-roam-node-list))
+           (similarities '()))
+      (dolist (node all-nodes)
+        (unless (string= (org-roam-node-id node) current-id)
+          (let ((similarity (hp/org-roam-calculate-similarity 
+                            current-id (org-roam-node-id node))))
+            (when (> similarity threshold)
+              (push (cons similarity node) similarities)))))
+      (if similarities
+          (let* ((sorted-similarities (sort similarities (lambda (a b) (> (car a) (car b)))))
+                 (buffer (get-buffer-create "*Similar Nodes*")))
+            (with-current-buffer buffer
+              (erase-buffer)
+              (insert (format "# Similar nodes to: %s\n\n" (org-roam-node-title current-node)))
+              (dolist (sim (seq-take sorted-similarities 10))  ; Show top 10
+                (let ((score (car sim))
+                      (node (cdr sim)))
+                  (insert (format "**%.2f** [[id:%s][%s]]\n"
+                                 score
+                                 (org-roam-node-id node)
+                                 (org-roam-node-title node)))))
+              (org-mode)
+              (goto-char (point-min)))
+            (pop-to-buffer buffer))
+        (message "No similar nodes found above threshold %.2f" threshold)))))
+
+(defun hp/org-roam-cluster-analysis ()
+  "Perform cluster analysis on all org-roam nodes."
+  (interactive)
+  (let* ((all-nodes (org-roam-node-list))
+         (clusters (make-hash-table :test 'equal))
+         (processed-pairs (make-hash-table :test 'equal)))
+    (message "Analyzing %d nodes for clustering..." (length all-nodes))
+    (dotimes (i (length all-nodes))
+      (let ((node1 (nth i all-nodes)))
+        (dotimes (j (length all-nodes))
+          (when (and (not (= i j))
+                     (not (gethash (format "%s-%s" 
+                                          (min i j) (max i j)) processed-pairs)))
+            (let* ((node2 (nth j all-nodes))
+                   (similarity (hp/org-roam-calculate-similarity 
+                               (org-roam-node-id node1) 
+                               (org-roam-node-id node2))))
+              (puthash (format "%s-%s" (min i j) (max i j)) t processed-pairs)
+              (when (> similarity 0.4)  ; Clustering threshold
+                (let ((cluster-key (format "cluster-%d" (min i j))))
+                  (unless (gethash cluster-key clusters)
+                    (puthash cluster-key '() clusters))
+                  (puthash cluster-key 
+                          (cons node1 (cons node2 (gethash cluster-key clusters)))
+                          clusters))))))))
+    (let ((buffer (get-buffer-create "*Node Clusters*")))
+      (with-current-buffer buffer
+        (erase-buffer)
+        (insert "# Node Clustering Analysis\n\n")
+        (maphash (lambda (cluster-key nodes)
+                   (let ((unique-nodes (delete-dups nodes)))
+                     (when (> (length unique-nodes) 1)
+                       (insert (format "## %s (%d nodes)\n\n" 
+                                      cluster-key (length unique-nodes)))
+                       (dolist (node unique-nodes)
+                         (insert (format "- [[id:%s][%s]]\n"
+                                        (org-roam-node-id node)
+                                        (org-roam-node-title node))))
+                       (insert "\n"))))
+                 clusters)
+        (org-mode)
+        (goto-char (point-min)))
+      (pop-to-buffer buffer))))
+
+(defun hp/org-roam-update-tag-weights ()
+  "Update tag frequency weights for better clustering."
+  (interactive)
+  (clrhash hp/org-roam-tag-weights)
+  (let ((all-nodes (org-roam-node-list)))
+    (dolist (node all-nodes)
+      (dolist (tag (org-roam-node-tags node))
+        (puthash tag (1+ (gethash tag hp/org-roam-tag-weights 0)) 
+                hp/org-roam-tag-weights)))
+    (message "Updated tag weights for %d unique tags" 
+             (hash-table-count hp/org-roam-tag-weights))))
+
+;; Initialize tag weights on startup
+(run-with-idle-timer 5 nil #'hp/org-roam-update-tag-weights)
+#+end_src
+
+***** Time-Based Link Decay & Refresh System
+
+#+begin_src emacs-lisp
+;; Time-based link decay and refresh system for org-roam
+(defvar hp/org-roam-link-decay-threshold 90
+  "Number of days after which a link is considered stale.")
+
+(defvar hp/org-roam-link-refresh-threshold 30
+  "Number of days after which to suggest refreshing content.")
+
+(defvar hp/org-roam-decay-weights
+  '((30 . 1.0)    ; Fresh (within 30 days)
+    (60 . 0.8)    ; Recent (30-60 days)
+    (90 . 0.6)    ; Aging (60-90 days)
+    (180 . 0.4)   ; Stale (90-180 days)
+    (365 . 0.2)   ; Old (180-365 days)
+    (1000 . 0.1)) ; Ancient (>365 days)
+  "Weight multipliers based on link age in days.")
+
+(defun hp/org-roam-calculate-link-age (file-path)
+  "Calculate the age of a file in days."
+  (let* ((file-time (file-attribute-modification-time (file-attributes file-path)))
+         (current-time (current-time))
+         (time-diff (time-subtract current-time file-time)))
+    (/ (float-time time-diff) 86400))) ; Convert to days
+
+(defun hp/org-roam-get-decay-weight (age-days)
+  "Get the decay weight for a given age in days."
+  (let ((weight 0.1)) ; Default weight for very old content
+    (dolist (threshold-weight hp/org-roam-decay-weights)
+      (when (<= age-days (car threshold-weight))
+        (setq weight (cdr threshold-weight))
+        (return)))
+    weight))
+
+(defun hp/org-roam-find-stale-links ()
+  "Find all stale links in the org-roam database."
+  (interactive)
+  (let* ((all-nodes (org-roam-node-list))
+         (stale-nodes '())
+         (refresh-nodes '()))
+    (dolist (node all-nodes)
+      (let* ((file-path (org-roam-node-file node))
+             (age-days (hp/org-roam-calculate-link-age file-path)))
+        (cond
+         ((> age-days hp/org-roam-link-decay-threshold)
+          (push (cons age-days node) stale-nodes))
+         ((> age-days hp/org-roam-link-refresh-threshold)
+          (push (cons age-days node) refresh-nodes)))))
+    
+    (let ((buffer (get-buffer-create "*Stale Links Analysis*")))
+      (with-current-buffer buffer
+        (erase-buffer)
+        (insert "# Link Decay Analysis\n\n")
+        
+        (when stale-nodes
+          (insert (format "## Stale Nodes (>%d days old)\n\n" hp/org-roam-link-decay-threshold))
+          (dolist (stale-node (sort stale-nodes (lambda (a b) (> (car a) (car b)))))
+            (let ((age (car stale-node))
+                  (node (cdr stale-node)))
+              (insert (format "**%d days old** - [[id:%s][%s]]\n"
+                             (round age)
+                             (org-roam-node-id node)
+                             (org-roam-node-title node)))))
+          (insert "\n"))
+        
+        (when refresh-nodes
+          (insert (format "## Nodes Needing Refresh (>%d days old)\n\n" hp/org-roam-link-refresh-threshold))
+          (dolist (refresh-node (sort refresh-nodes (lambda (a b) (> (car a) (car b)))))
+            (let ((age (car refresh-node))
+                  (node (cdr refresh-node)))
+              (insert (format "**%d days old** - [[id:%s][%s]]\n"
+                             (round age)
+                             (org-roam-node-id node)
+                             (org-roam-node-title node)))))
+          (insert "\n"))
+        
+        (insert (format "\n## Summary\n- Stale nodes: %d\n- Nodes needing refresh: %d\n- Total analyzed: %d"
+                       (length stale-nodes) (length refresh-nodes) (length all-nodes)))
+        (org-mode)
+        (goto-char (point-min)))
+      (pop-to-buffer buffer))))
+
+(defun hp/org-roam-refresh-node-timestamp ()
+  "Refresh the timestamp of the current node."
+  (interactive)
+  (when-let ((node (org-roam-node-at-point)))
+    (save-excursion
+      (goto-char (point-min))
+      (if (re-search-forward "^#\\+created:" nil t)
+          (progn
+            (beginning-of-line)
+            (kill-line)
+            (insert (format "#+created: %s" (format-time-string "[%Y-%m-%d %a %H:%M]"))))
+        (progn
+          (goto-char (point-min))
+          (when (re-search-forward "^#\\+title:" nil t)
+            (end-of-line)
+            (insert (format "\n#+created: %s" (format-time-string "[%Y-%m-%d %a %H:%M]"))))))
+      ;; Also add a last-modified timestamp
+      (goto-char (point-min))
+      (if (re-search-forward "^#\\+modified:" nil t)
+          (progn
+            (beginning-of-line)
+            (kill-line)
+            (insert (format "#+modified: %s" (format-time-string "[%Y-%m-%d %a %H:%M]"))))
+        (progn
+          (goto-char (point-min))
+          (when (re-search-forward "^#\\+created:" nil t)
+            (end-of-line)
+            (insert (format "\n#+modified: %s" (format-time-string "[%Y-%m-%d %a %H:%M]")))))))
+    (org-roam-db-sync)
+    (message "Refreshed timestamps for: %s" (org-roam-node-title node))))
+
+(defun hp/org-roam-weighted-node-search ()
+  "Search nodes with time-based decay weighting."
+  (interactive)
+  (let* ((all-nodes (org-roam-node-list))
+         (weighted-nodes '()))
+    (dolist (node all-nodes)
+      (let* ((file-path (org-roam-node-file node))
+             (age-days (hp/org-roam-calculate-link-age file-path))
+             (weight (hp/org-roam-get-decay-weight age-days))
+             (weighted-title (format "[%.1f] %s" weight (org-roam-node-title node))))
+        (push (cons weighted-title node) weighted-nodes)))
+    
+    (let* ((sorted-nodes (sort weighted-nodes 
+                              (lambda (a b) 
+                                (let ((weight-a (string-to-number (substring (car a) 1 4)))
+                                      (weight-b (string-to-number (substring (car b) 1 4))))
+                                  (> weight-a weight-b)))))
+           (selected (completing-read "Select node (time-weighted): " 
+                                     (mapcar #'car sorted-nodes)))
+           (node (cdr (assoc selected sorted-nodes))))
+      (org-roam-node-visit node))))
+
+(defun hp/org-roam-schedule-refresh-reminders ()
+  "Schedule refresh reminders for aging content."
+  (interactive)
+  (let* ((all-nodes (org-roam-node-list))
+         (reminder-count 0))
+    (dolist (node all-nodes)
+      (let* ((file-path (org-roam-node-file node))
+             (age-days (hp/org-roam-calculate-link-age file-path)))
+        (when (and (> age-days hp/org-roam-link-refresh-threshold)
+                   (< age-days hp/org-roam-link-decay-threshold))
+          (setq reminder-count (1+ reminder-count))
+          ;; Could integrate with org-agenda or notification system here
+          )))
+    (message "Scheduled %d refresh reminders" reminder-count)))
+
+(defface hp/org-roam-stale-link-face
+  '((t (:foreground "#888888" :slant italic)))
+  "Face for stale org-roam links.")
+
+(defface hp/org-roam-fresh-link-face
+  '((t (:foreground "#4CAF50" :weight bold)))
+  "Face for fresh org-roam links.")
+
+(defun hp/org-roam-colorize-links-by-age ()
+  "Colorize org-roam links based on their age."
+  (interactive)
+  (save-excursion
+    (goto-char (point-min))
+    (while (re-search-forward "\\[\\[id:\\([^]]+\\)\\]\\[\\([^]]+\\)\\]\\]" nil t)
+      (let* ((node-id (match-string 1))
+             (node (org-roam-node-from-id node-id))
+             (overlay (make-overlay (match-beginning 0) (match-end 0))))
+        (when node
+          (let* ((file-path (org-roam-node-file node))
+                 (age-days (hp/org-roam-calculate-link-age file-path))
+                 (face (cond
+                        ((< age-days 30) 'hp/org-roam-fresh-link-face)
+                        ((> age-days hp/org-roam-link-decay-threshold) 'hp/org-roam-stale-link-face)
+                        (t 'default))))
+            (overlay-put overlay 'face face)
+            (overlay-put overlay 'help-echo 
+                        (format "Age: %d days, Weight: %.1f" 
+                               (round age-days)
+                               (hp/org-roam-get-decay-weight age-days)))))))))
+
+(defun hp/org-roam-cleanup-stale-content ()
+  "Interactive cleanup of stale content."
+  (interactive)
+  (let* ((all-nodes (org-roam-node-list))
+         (stale-nodes '()))
+    (dolist (node all-nodes)
+      (let* ((file-path (org-roam-node-file node))
+             (age-days (hp/org-roam-calculate-link-age file-path)))
+        (when (> age-days hp/org-roam-link-decay-threshold)
+          (push (cons age-days node) stale-nodes))))
+    
+    (if stale-nodes
+        (progn
+          (message "Found %d stale nodes" (length stale-nodes))
+          (dolist (stale-node (sort stale-nodes (lambda (a b) (> (car a) (car b)))))
+            (let* ((age (car stale-node))
+                   (node (cdr stale-node))
+                   (title (org-roam-node-title node)))
+              (when (y-or-n-p (format "Archive/refresh %s (%d days old)? " title (round age)))
+                (org-roam-node-visit node)
+                (hp/org-roam-refresh-node-timestamp)
+                (message "Refreshed: %s" title)))))
+      (message "No stale content found"))))
+
+;; Auto-colorize links in org-roam buffers
+(add-hook 'org-roam-mode-hook #'hp/org-roam-colorize-links-by-age)
+#+end_src
+
+***** Enhanced Capture with Context Awareness
+
+#+begin_src emacs-lisp
+;; Context-aware capture system for org-roam
+(defvar hp/org-roam-context-buffer "*Org-Roam Context*"
+  "Buffer name for displaying capture context.")
+
+(defvar hp/org-roam-capture-context-history '()
+  "History of recent capture contexts.")
+
+(defun hp/org-roam-get-current-context ()
+  "Get the current context for capture (current file, project, etc.)."
+  (let ((context '()))
+    ;; Current file context
+    (when buffer-file-name
+      (push (cons "current-file" (file-name-base buffer-file-name)) context))
+    
+    ;; Current org-roam node context
+    (when-let ((node (org-roam-node-at-point)))
+      (push (cons "current-node" (org-roam-node-title node)) context)
+      (push (cons "current-node-id" (org-roam-node-id node)) context)
+      (push (cons "current-tags" (org-roam-node-tags node)) context))
+    
+    ;; Project context (if using projectile)
+    (when (and (bound-and-true-p projectile-mode) (projectile-project-p))
+      (push (cons "project" (projectile-project-name)) context))
+    
+    ;; Time context
+    (push (cons "time-of-day" 
+                (cond 
+                 ((< (string-to-number (format-time-string "%H")) 12) "morning")
+                 ((< (string-to-number (format-time-string "%H")) 17) "afternoon")
+                 (t "evening"))) context)
+    
+    ;; Day context
+    (push (cons "day-of-week" (downcase (format-time-string "%A"))) context)
+    
+    context))
+
+(defun hp/org-roam-suggest-tags-from-context (context)
+  "Suggest tags based on capture context."
+  (let ((suggested-tags '()))
+    (dolist (ctx context)
+      (let ((key (car ctx))
+            (value (cdr ctx)))
+        (cond
+         ((string= key "project")
+          (push "project" suggested-tags))
+         ((string= key "current-tags")
+          (when (listp value)
+            (setq suggested-tags (append suggested-tags value))))
+         ((string= key "time-of-day")
+          (when (member value '("morning" "evening"))
+            (push "reflection" suggested-tags)))
+         ((string= key "day-of-week")
+          (when (member value '("saturday" "sunday"))
+            (push "personal" suggested-tags))))))
+    (delete-dups suggested-tags)))
+
+(defun hp/org-roam-suggest-links-from-context (context)
+  "Suggest related nodes based on context."
+  (let ((suggested-links '())
+        (current-node-id (cdr (assoc "current-node-id" context)))
+        (current-tags (cdr (assoc "current-tags" context))))
+    
+    ;; Find nodes with similar tags
+    (when current-tags
+      (let ((similar-nodes (org-roam-db-query
+                           "SELECT DISTINCT nodes.id, nodes.title 
+                            FROM nodes 
+                            JOIN tags ON nodes.id = tags.node_id 
+                            WHERE tags.tag IN (%s) AND nodes.id != ?"
+                           (mapconcat (lambda (tag) (format "'%s'" tag)) current-tags ",")
+                           (or current-node-id ""))))
+        (dolist (node similar-nodes)
+          (push (cons (nth 1 node) (nth 0 node)) suggested-links))))
+    
+    (seq-take suggested-links 5))) ; Limit to 5 suggestions
+
+(defun hp/org-roam-enhanced-capture ()
+  "Enhanced capture with context awareness."
+  (interactive)
+  (let* ((context (hp/org-roam-get-current-context))
+         (suggested-tags (hp/org-roam-suggest-tags-from-context context))
+         (suggested-links (hp/org-roam-suggest-links-from-context context))
+         (capture-type (completing-read "Capture type: " 
+                                       '("note" "idea" "question" "meeting" "task" "research"))))
+    
+    ;; Store context for use in capture template
+    (setq hp/org-roam-current-capture-context context)
+    (setq hp/org-roam-current-suggested-tags suggested-tags)
+    (setq hp/org-roam-current-suggested-links suggested-links)
+    (setq hp/org-roam-current-capture-type capture-type)
+    
+    ;; Display context information
+    (hp/org-roam-show-capture-context context suggested-tags suggested-links)
+    
+    ;; Launch appropriate capture template
+    (cond
+     ((string= capture-type "meeting")
+      (org-roam-capture- :keys "m"))
+     ((string= capture-type "research")
+      (org-roam-capture- :keys "r"))
+     ((string= capture-type "task")
+      (org-roam-capture- :keys "t"))
+     ((string= capture-type "question")
+      (org-roam-capture- :keys "q"))
+     (t (org-roam-capture- :keys "c"))))) ; Enhanced default
+
+(defun hp/org-roam-show-capture-context (context suggested-tags suggested-links)
+  "Display capture context in a side buffer."
+  (let ((buffer (get-buffer-create hp/org-roam-context-buffer)))
+    (with-current-buffer buffer
+      (erase-buffer)
+      (insert "# Capture Context\n\n")
+      
+      (insert "## Current Context\n")
+      (dolist (ctx context)
+        (insert (format "- **%s**: %s\n" (car ctx) (cdr ctx))))
+      
+      (when suggested-tags
+        (insert "\n## Suggested Tags\n")
+        (dolist (tag suggested-tags)
+          (insert (format "- %s\n" tag))))
+      
+      (when suggested-links
+        (insert "\n## Related Notes\n")
+        (dolist (link suggested-links)
+          (insert (format "- [[id:%s][%s]]\n" (cdr link) (car link)))))
+      
+      (org-mode)
+      (goto-char (point-min)))
+    
+    ;; Show in side window
+    (display-buffer buffer '((display-buffer-in-side-window)
+                            (side . right)
+                            (window-width . 0.3)))))
+
+(defun hp/org-roam-insert-context-template ()
+  "Insert context-aware template content."
+  (when (bound-and-true-p hp/org-roam-current-capture-context)
+    (let ((current-node (cdr (assoc "current-node" hp/org-roam-current-capture-context)))
+          (project (cdr (assoc "project" hp/org-roam-current-capture-context)))
+          (suggested-links hp/org-roam-current-suggested-links))
+      
+      (when current-node
+        (insert (format "\n** Context\nRelated to: [[id:%s][%s]]\n\n" 
+                       (cdr (assoc "current-node-id" hp/org-roam-current-capture-context))
+                       current-node)))
+      
+      (when project
+        (insert (format "Project: %s\n\n" project)))
+      
+      (when suggested-links
+        (insert "** Related Notes\n")
+        (dolist (link (seq-take suggested-links 3))
+          (insert (format "- [[id:%s][%s]]\n" (cdr link) (car link))))
+        (insert "\n")))))
+
+(defun hp/org-roam-get-suggested-tags-for-template ()
+  "Get suggested tags for use in capture templates."
+  (if (bound-and-true-p hp/org-roam-current-suggested-tags)
+      (string-join hp/org-roam-current-suggested-tags " ")
+    ""))
+
+(defvar hp/org-roam-current-capture-context nil)
+(defvar hp/org-roam-current-suggested-tags nil)
+(defvar hp/org-roam-current-suggested-links nil)
+(defvar hp/org-roam-current-capture-type nil)
+#+end_src
+
 ***** Capture templates
 #+begin_src emacs-lisp
 (use-package! org-roam-capture
@@ -1436,6 +2125,31 @@ Sorting =org-roam-node-find= by last modified time seems the most intuitive for 
            :target
            (file+head "%<%Y%m%d%H%M%S>-${slug}.org"
                       "#+title: ${title}\n#+created: %U\n#+filetags: %(completing-read \"Function tags: \" hp/org-roam-function-tags)\n#+startup: overview")
+           :unnarrowed t)
+          ("c" "context-aware" plain "%(hp/org-roam-insert-context-template)%?"
+           :target
+           (file+head "%<%Y%m%d%H%M%S>-${slug}.org"
+                      "#+title: ${title}\n#+created: %U\n#+filetags: %(hp/org-roam-get-suggested-tags-for-template)\n#+context: %(cdr (assoc \"capture-type\" hp/org-roam-current-capture-context))\n#+startup: overview")
+           :unnarrowed t)
+          ("m" "meeting" plain "** Attendees\n- \n\n** Agenda\n%?\n\n** Notes\n\n** Action Items\n- [ ] \n\n%(hp/org-roam-insert-context-template)"
+           :target
+           (file+head "%<%Y%m%d%H%M%S>-meeting-${slug}.org"
+                      "#+title: Meeting: ${title}\n#+created: %U\n#+filetags: meeting %(hp/org-roam-get-suggested-tags-for-template)\n#+startup: overview")
+           :unnarrowed t)
+          ("r" "research" plain "** Research Question\n%?\n\n** Methodology\n\n** Findings\n\n** References\n\n%(hp/org-roam-insert-context-template)"
+           :target
+           (file+head "%<%Y%m%d%H%M%S>-research-${slug}.org"
+                      "#+title: Research: ${title}\n#+created: %U\n#+filetags: research %(hp/org-roam-get-suggested-tags-for-template)\n#+startup: overview")
+           :unnarrowed t)
+          ("t" "task" plain "** Description\n%?\n\n** Requirements\n\n** Progress\n- [ ] \n\n%(hp/org-roam-insert-context-template)"
+           :target
+           (file+head "%<%Y%m%d%H%M%S>-task-${slug}.org"
+                      "#+title: Task: ${title}\n#+created: %U\n#+filetags: task %(hp/org-roam-get-suggested-tags-for-template)\n#+startup: overview")
+           :unnarrowed t)
+          ("q" "question" plain "** Question\n%?\n\n** Context\n\n** Potential Answers\n\n** Resources\n\n%(hp/org-roam-insert-context-template)"
+           :target
+           (file+head "%<%Y%m%d%H%M%S>-question-${slug}.org"
+                      "#+title: Question: ${title}\n#+created: %U\n#+filetags: question %(hp/org-roam-get-suggested-tags-for-template)\n#+startup: overview")
            :unnarrowed t))))
 
 (use-package! org-roam-dailies
@@ -1456,6 +2170,530 @@ Sorting =org-roam-node-find= by last modified time seems the most intuitive for 
                  (file+head "%<%Y%m%d%H%M%S>-${slug}.org"
                             "#+title: ${title}\n#+created: %U\n#+filetags: web\n#+roam_refs: %c\n#+startup: overview\n\n")
                  :unnarrowed t)))
+
+***** Multi-Dimensional Note Navigation
+
+#+begin_src emacs-lisp
+;; Multi-dimensional navigation system for org-roam
+(defvar hp/org-roam-navigation-dimensions
+  '(("temporal" . (("recent" . "recently modified")
+                   ("old" . "older content")
+                   ("today" . "created today")
+                   ("week" . "created this week")))
+    ("semantic" . (("related" . "semantically related")
+                   ("similar" . "similar content")
+                   ("referenced" . "frequently referenced")
+                   ("orphaned" . "unlinked nodes")))
+    ("structural" . (("hub" . "highly connected nodes")
+                     ("leaf" . "terminal nodes")
+                     ("bridge" . "bridge nodes")
+                     ("cluster" . "clustered nodes")))
+    ("functional" . (("concept" . "conceptual notes")
+                     ("project" . "project-related")
+                     ("literature" . "literature notes")
+                     ("journal" . "journal entries"))))
+  "Dimensions and filters for multi-dimensional navigation.")
+
+(defvar hp/org-roam-current-navigation-state
+  '((dimension . "temporal")
+    (filter . "recent")
+    (depth . 2)
+    (context . nil))
+  "Current state of multi-dimensional navigation.")
+
+(defun hp/org-roam-navigate-by-dimension (dimension filter)
+  "Navigate nodes by specified dimension and filter."
+  (interactive 
+   (let* ((dim-choices (mapcar #'car hp/org-roam-navigation-dimensions))
+          (selected-dim (completing-read "Dimension: " dim-choices))
+          (filter-choices (cdr (assoc selected-dim hp/org-roam-navigation-dimensions)))
+          (selected-filter (completing-read "Filter: " (mapcar #'car filter-choices))))
+     (list selected-dim selected-filter)))
+  
+  (setf (alist-get 'dimension hp/org-roam-current-navigation-state) dimension)
+  (setf (alist-get 'filter hp/org-roam-current-navigation-state) filter)
+  
+  (let ((nodes (hp/org-roam-get-nodes-by-dimension dimension filter)))
+    (if nodes
+        (hp/org-roam-show-navigation-results dimension filter nodes)
+      (message "No nodes found for %s:%s" dimension filter))))
+
+(defun hp/org-roam-get-nodes-by-dimension (dimension filter)
+  "Get nodes based on dimension and filter criteria."
+  (let ((all-nodes (org-roam-node-list)))
+    (cond
+     ;; Temporal dimension
+     ((and (string= dimension "temporal") (string= filter "recent"))
+      (seq-take (sort all-nodes (lambda (a b)
+                                  (time-less-p (org-roam-node-file-mtime b)
+                                              (org-roam-node-file-mtime a)))) 20))
+     
+     ((and (string= dimension "temporal") (string= filter "today"))
+      (let ((today (format-time-string "%Y-%m-%d")))
+        (seq-filter (lambda (node)
+                      (string-prefix-p today 
+                                      (format-time-string "%Y-%m-%d" 
+                                                         (org-roam-node-file-mtime node))))
+                    all-nodes)))
+     
+     ((and (string= dimension "temporal") (string= filter "week"))
+      (let ((week-ago (time-subtract (current-time) (days-to-time 7))))
+        (seq-filter (lambda (node)
+                      (time-less-p week-ago (org-roam-node-file-mtime node)))
+                    all-nodes)))
+     
+     ;; Semantic dimension
+     ((and (string= dimension "semantic") (string= filter "orphaned"))
+      (seq-filter (lambda (node)
+                    (= 0 (caar (org-roam-db-query
+                               "SELECT COUNT(*) FROM links WHERE target = ?"
+                               (org-roam-node-id node)))))
+                  all-nodes))
+     
+     ((and (string= dimension "semantic") (string= filter "referenced"))
+      (let ((referenced-nodes '()))
+        (dolist (node all-nodes)
+          (let ((ref-count (caar (org-roam-db-query
+                                 "SELECT COUNT(*) FROM links WHERE target = ?"
+                                 (org-roam-node-id node)))))
+            (when (> ref-count 2)
+              (push (cons ref-count node) referenced-nodes))))
+        (mapcar #'cdr (sort referenced-nodes (lambda (a b) (> (car a) (car b)))))))
+     
+     ;; Structural dimension
+     ((and (string= dimension "structural") (string= filter "hub"))
+      (let ((hub-nodes '()))
+        (dolist (node all-nodes)
+          (let ((link-count (+ (caar (org-roam-db-query
+                                     "SELECT COUNT(*) FROM links WHERE source = ?"
+                                     (org-roam-node-id node)))
+                              (caar (org-roam-db-query
+                                     "SELECT COUNT(*) FROM links WHERE target = ?"
+                                     (org-roam-node-id node))))))
+            (when (> link-count 5)
+              (push (cons link-count node) hub-nodes))))
+        (mapcar #'cdr (sort hub-nodes (lambda (a b) (> (car a) (car b)))))))
+     
+     ((and (string= dimension "structural") (string= filter "leaf"))
+      (seq-filter (lambda (node)
+                    (and (= 0 (caar (org-roam-db-query
+                                    "SELECT COUNT(*) FROM links WHERE source = ?"
+                                    (org-roam-node-id node))))
+                         (> 0 (caar (org-roam-db-query
+                                    "SELECT COUNT(*) FROM links WHERE target = ?"
+                                    (org-roam-node-id node))))))
+                  all-nodes))
+     
+     ;; Functional dimension
+     ((and (string= dimension "functional") (string= filter "concept"))
+      (seq-filter (lambda (node)
+                    (member "concept" (org-roam-node-tags node)))
+                  all-nodes))
+     
+     ((and (string= dimension "functional") (string= filter "project"))
+      (seq-filter (lambda (node)
+                    (member "project" (org-roam-node-tags node)))
+                  all-nodes))
+     
+     (t all-nodes))))
+
+(defun hp/org-roam-show-navigation-results (dimension filter nodes)
+  "Show navigation results in a dedicated buffer."
+  (let ((buffer (get-buffer-create "*Org-Roam Navigation*")))
+    (with-current-buffer buffer
+      (erase-buffer)
+      (insert (format "# Multi-Dimensional Navigation: %s → %s\n\n" 
+                     (capitalize dimension) filter))
+      
+      (insert (format "Found %d nodes\n\n" (length nodes)))
+      
+      (dolist (node nodes)
+        (let ((title (org-roam-node-title node))
+              (id (org-roam-node-id node))
+              (tags (org-roam-node-tags node))
+              (mtime (format-time-string "%Y-%m-%d" (org-roam-node-file-mtime node))))
+          (insert (format "** [[id:%s][%s]]\n" id title))
+          (when tags
+            (insert (format "   Tags: %s\n" (string-join tags ", "))))
+          (insert (format "   Modified: %s\n\n" mtime))))
+      
+      (insert "\n## Navigation Options\n")
+      (insert "- Press 'n' for next dimension\n")
+      (insert "- Press 'f' to change filter\n") 
+      (insert "- Press 'r' to refine results\n")
+      (insert "- Press 'RET' on a link to visit\n")
+      
+      (org-mode)
+      (goto-char (point-min))
+      (hp/org-roam-navigation-mode 1))
+    
+    (pop-to-buffer buffer)))
+
+(define-minor-mode hp/org-roam-navigation-mode
+  "Minor mode for multi-dimensional org-roam navigation."
+  :keymap (let ((map (make-sparse-keymap)))
+            (define-key map (kbd "n") #'hp/org-roam-navigate-next-dimension)
+            (define-key map (kbd "f") #'hp/org-roam-navigate-change-filter)
+            (define-key map (kbd "r") #'hp/org-roam-navigate-refine)
+            (define-key map (kbd "q") #'quit-window)
+            map))
+
+(defun hp/org-roam-navigate-next-dimension ()
+  "Navigate to the next dimension."
+  (interactive)
+  (let* ((current-dim (alist-get 'dimension hp/org-roam-current-navigation-state))
+         (dimensions (mapcar #'car hp/org-roam-navigation-dimensions))
+         (current-index (seq-position dimensions current-dim))
+         (next-index (mod (1+ current-index) (length dimensions)))
+         (next-dim (nth next-index dimensions))
+         (filters (cdr (assoc next-dim hp/org-roam-navigation-dimensions)))
+         (first-filter (caar filters)))
+    (hp/org-roam-navigate-by-dimension next-dim first-filter)))
+
+(defun hp/org-roam-navigate-change-filter ()
+  "Change filter within current dimension."
+  (interactive)
+  (let* ((current-dim (alist-get 'dimension hp/org-roam-current-navigation-state))
+         (filters (cdr (assoc current-dim hp/org-roam-navigation-dimensions)))
+         (selected-filter (completing-read "Filter: " (mapcar #'car filters))))
+    (hp/org-roam-navigate-by-dimension current-dim selected-filter)))
+
+(defun hp/org-roam-navigate-refine ()
+  "Refine current navigation results."
+  (interactive)
+  (let ((refinement (completing-read "Refine by: " 
+                                    '("tag" "title-contains" "recent-only" "exclude-tag"))))
+    (message "Refinement: %s (implementation pending)" refinement)))
+
+(defun hp/org-roam-create-navigation-dashboard ()
+  "Create a navigation dashboard showing all dimensions."
+  (interactive)
+  (let ((buffer (get-buffer-create "*Org-Roam Dashboard*")))
+    (with-current-buffer buffer
+      (erase-buffer)
+      (insert "# Org-Roam Navigation Dashboard\n\n")
+      
+      (dolist (dim-info hp/org-roam-navigation-dimensions)
+        (let ((dimension (car dim-info))
+              (filters (cdr dim-info)))
+          (insert (format "## %s Dimension\n" (capitalize dimension)))
+          (dolist (filter-info filters)
+            (let* ((filter (car filter-info))
+                   (description (cdr filter-info))
+                   (count (length (hp/org-roam-get-nodes-by-dimension dimension filter))))
+              (insert (format "- [[elisp:(hp/org-roam-navigate-by-dimension \"%s\" \"%s\")][%s]] (%d nodes) - %s\n"
+                             dimension filter filter count description))))
+          (insert "\n")))
+      
+      (insert "## Quick Actions\n")
+      (insert "- [[elisp:(hp/org-roam-enhanced-capture)][Enhanced Capture]]\n")
+      (insert "- [[elisp:(hp/org-roam-find-similar-nodes)][Find Similar Nodes]]\n")
+      (insert "- [[elisp:(hp/org-roam-cluster-analysis)][Cluster Analysis]]\n")
+      (insert "- [[elisp:(hp/org-roam-find-stale-links)][Find Stale Links]]\n")
+      
+      (org-mode)
+      (goto-char (point-min)))
+    (pop-to-buffer buffer)))
+
+(defun hp/org-roam-spatial-navigation ()
+  "Navigate through org-roam using spatial/visual metaphors."
+  (interactive)
+  (let* ((current-node (org-roam-node-at-point))
+         (connected-nodes (when current-node
+                           (org-roam-db-query
+                            "SELECT target FROM links WHERE source = ?"
+                            (org-roam-node-id current-node))))
+         (directions '("north" "south" "east" "west" "up" "down")))
+    (when current-node
+      (let ((buffer (get-buffer-create "*Spatial Navigation*")))
+        (with-current-buffer buffer
+          (erase-buffer)
+          (insert (format "# Spatial Navigation from: %s\n\n" 
+                         (org-roam-node-title current-node)))
+          (insert "```\n")
+          (insert "      [North]\n")
+          (insert "        ↑\n")
+          (insert "[West] ← YOU → [East]\n")
+          (insert "        ↓\n")
+          (insert "      [South]\n")
+          (insert "```\n\n")
+          
+          (let ((direction-nodes (seq-take connected-nodes 6)))
+            (dotimes (i (length direction-nodes))
+              (let* ((direction (nth i directions))
+                     (node-id (car (nth i direction-nodes)))
+                     (node (org-roam-node-from-id node-id)))
+                (when node
+                  (insert (format "**%s**: [[id:%s][%s]]\n" 
+                                 (capitalize direction) node-id 
+                                 (org-roam-node-title node)))))))
+          
+          (org-mode)
+          (goto-char (point-min)))
+        (pop-to-buffer buffer)))))
+#+end_src
+
+***** Research Thread Visualization System
+
+#+begin_src emacs-lisp
+;; Research thread visualization system for org-roam
+(defvar hp/org-roam-thread-types
+  '(("concept-development" . "🧠")
+    ("literature-review" . "📚")
+    ("methodology" . "🔬")
+    ("analysis" . "📊")
+    ("argumentation" . "💭")
+    ("citation-chain" . "🔗")
+    ("temporal-sequence" . "⏰"))
+  "Types of research threads with their visual indicators.")
+
+(defvar hp/org-roam-thread-colors
+  '(("concept-development" . "#FF6B6B")
+    ("literature-review" . "#4ECDC4")
+    ("methodology" . "#45B7D1")
+    ("analysis" . "#96CEB4")
+    ("argumentation" . "#FFEAA7")
+    ("citation-chain" . "#DDA0DD")
+    ("temporal-sequence" . "#98D8C8"))
+  "Colors for different research thread types.")
+
+(defun hp/org-roam-identify-research-threads ()
+  "Identify and categorize research threads in the knowledge base."
+  (interactive)
+  (let* ((all-nodes (org-roam-node-list))
+         (threads (make-hash-table :test 'equal))
+         (processed-nodes (make-hash-table :test 'equal)))
+    
+    (dolist (node all-nodes)
+      (unless (gethash (org-roam-node-id node) processed-nodes)
+        (let ((thread (hp/org-roam-trace-thread node)))
+          (when (> (length thread) 2) ; Only consider threads with 3+ nodes
+            (let* ((thread-type (hp/org-roam-classify-thread thread))
+                   (thread-key (format "%s-%d" thread-type (hash-table-count threads))))
+              (puthash thread-key thread threads)
+              ;; Mark nodes as processed
+              (dolist (thread-node thread)
+                (puthash (org-roam-node-id thread-node) t processed-nodes)))))))
+    
+    (hp/org-roam-visualize-threads threads)))
+
+(defun hp/org-roam-trace-thread (start-node &optional visited max-depth)
+  "Trace a research thread starting from a node."
+  (setq visited (or visited (make-hash-table :test 'equal)))
+  (setq max-depth (or max-depth 10))
+  
+  (when (and (> max-depth 0) 
+             (not (gethash (org-roam-node-id start-node) visited)))
+    (puthash (org-roam-node-id start-node) t visited)
+    
+    (let* ((connected-ids (org-roam-db-query
+                          "SELECT target FROM links WHERE source = ?"
+                          (org-roam-node-id start-node)))
+           (connected-nodes (mapcar (lambda (id) (org-roam-node-from-id (car id)))
+                                   connected-ids))
+           (thread (list start-node)))
+      
+      ;; Follow the strongest connections
+      (dolist (node connected-nodes)
+        (when (and node (not (gethash (org-roam-node-id node) visited)))
+          (let ((connection-strength (hp/org-roam-calculate-connection-strength 
+                                     start-node node)))
+            (when (> connection-strength 0.5) ; Threshold for strong connections
+              (let ((sub-thread (hp/org-roam-trace-thread node visited (1- max-depth))))
+                (setq thread (append thread sub-thread)))))))
+      
+      thread)))
+
+(defun hp/org-roam-calculate-connection-strength (node1 node2)
+  "Calculate connection strength between two nodes."
+  (let* ((shared-tags (seq-intersection (org-roam-node-tags node1) 
+                                       (org-roam-node-tags node2)))
+         (tag-score (* 0.3 (length shared-tags)))
+         (temporal-score (hp/org-roam-calculate-temporal-proximity node1 node2))
+         (citation-score (hp/org-roam-check-citation-relationship node1 node2)))
+    (+ tag-score temporal-score citation-score)))
+
+(defun hp/org-roam-calculate-temporal-proximity (node1 node2)
+  "Calculate temporal proximity score between two nodes."
+  (let* ((time1 (org-roam-node-file-mtime node1))
+         (time2 (org-roam-node-file-mtime node2))
+         (time-diff (abs (float-time (time-subtract time1 time2))))
+         (days-diff (/ time-diff 86400)))
+    (cond
+     ((< days-diff 1) 0.4)   ; Same day
+     ((< days-diff 7) 0.3)   ; Same week
+     ((< days-diff 30) 0.2)  ; Same month
+     (t 0.1))))              ; Older
+
+(defun hp/org-roam-check-citation-relationship (node1 node2)
+  "Check if nodes have citation relationships."
+  (let* ((id1 (org-roam-node-id node1))
+         (id2 (org-roam-node-id node2))
+         (direct-link (org-roam-db-query
+                      "SELECT COUNT(*) FROM links WHERE source = ? AND target = ?"
+                      id1 id2))
+         (reverse-link (org-roam-db-query
+                       "SELECT COUNT(*) FROM links WHERE source = ? AND target = ?"
+                       id2 id1)))
+    (cond
+     ((or (> (caar direct-link) 0) (> (caar reverse-link) 0)) 0.5)
+     (t 0))))
+
+(defun hp/org-roam-classify-thread (thread)
+  "Classify a research thread based on its characteristics."
+  (let* ((tags (flatten-list (mapcar #'org-roam-node-tags thread)))
+         (tag-frequencies (make-hash-table :test 'equal)))
+    
+    ;; Count tag frequencies
+    (dolist (tag tags)
+      (puthash tag (1+ (gethash tag tag-frequencies 0)) tag-frequencies))
+    
+    ;; Classify based on dominant tags and patterns
+    (cond
+     ((or (gethash "literature" tag-frequencies)
+          (gethash "paper" tag-frequencies)
+          (gethash "review" tag-frequencies))
+      "literature-review")
+     ((or (gethash "concept" tag-frequencies)
+          (gethash "theory" tag-frequencies)
+          (gethash "definition" tag-frequencies))
+      "concept-development")
+     ((or (gethash "method" tag-frequencies)
+          (gethash "methodology" tag-frequencies)
+          (gethash "experiment" tag-frequencies))
+      "methodology")
+     ((or (gethash "analysis" tag-frequencies)
+          (gethash "data" tag-frequencies)
+          (gethash "results" tag-frequencies))
+      "analysis")
+     ((hp/org-roam-has-temporal-sequence thread)
+      "temporal-sequence")
+     (t "concept-development"))))
+
+(defun hp/org-roam-has-temporal-sequence (thread)
+  "Check if thread represents a clear temporal sequence."
+  (when (> (length thread) 2)
+    (let ((times (mapcar #'org-roam-node-file-mtime thread)))
+      (equal times (sort (copy-sequence times) #'time-less-p)))))
+
+(defun hp/org-roam-visualize-threads (threads)
+  "Visualize research threads in a dedicated buffer."
+  (let ((buffer (get-buffer-create "*Research Threads*")))
+    (with-current-buffer buffer
+      (erase-buffer)
+      (insert "# Research Thread Visualization\n\n")
+      
+      (maphash (lambda (thread-key thread)
+                 (let* ((thread-type (car (split-string thread-key "-")))
+                        (thread-icon (cdr (assoc thread-type hp/org-roam-thread-types)))
+                        (thread-color (cdr (assoc thread-type hp/org-roam-thread-colors))))
+                   
+                   (insert (format "## %s %s Thread (%d nodes)\n\n" 
+                                  (or thread-icon "🔗") 
+                                  (capitalize (replace-regexp-in-string "-" " " thread-type))
+                                  (length thread)))
+                   
+                   ;; Create visual thread representation
+                   (dotimes (i (length thread))
+                     (let* ((node (nth i thread))
+                            (title (org-roam-node-title node))
+                            (id (org-roam-node-id node))
+                            (connector (if (< i (1- (length thread))) " → " "")))
+                       (insert (format "[[id:%s][%s]]%s" id title connector))))
+                   
+                   (insert "\n\n")
+                   
+                   ;; Add thread analysis
+                   (insert "### Thread Analysis\n")
+                   (let* ((start-time (org-roam-node-file-mtime (car thread)))
+                          (end-time (org-roam-node-file-mtime (car (last thread))))
+                          (duration (/ (float-time (time-subtract end-time start-time)) 86400))
+                          (all-tags (delete-dups (flatten-list (mapcar #'org-roam-node-tags thread)))))
+                     (insert (format "- **Duration**: %.1f days\n" duration))
+                     (insert (format "- **Key Tags**: %s\n" (string-join all-tags ", ")))
+                     (insert (format "- **Thread Strength**: %.2f\n" 
+                                    (hp/org-roam-calculate-thread-strength thread))))
+                   
+                   (insert "\n---\n\n")))
+               threads)
+      
+      (insert "## Thread Statistics\n")
+      (insert (format "- Total threads identified: %d\n" (hash-table-count threads)))
+      
+      (let ((type-counts (make-hash-table :test 'equal)))
+        (maphash (lambda (key _)
+                   (let ((type (car (split-string key "-"))))
+                     (puthash type (1+ (gethash type type-counts 0)) type-counts)))
+                 threads)
+        (insert "\n### Thread Types\n")
+        (maphash (lambda (type count)
+                   (let ((icon (cdr (assoc type hp/org-roam-thread-types))))
+                     (insert (format "- %s %s: %d threads\n" 
+                                    (or icon "🔗") 
+                                    (capitalize (replace-regexp-in-string "-" " " type)) 
+                                    count))))
+                 type-counts))
+      
+      (org-mode)
+      (goto-char (point-min)))
+    (pop-to-buffer buffer)))
+
+(defun hp/org-roam-calculate-thread-strength (thread)
+  "Calculate the overall strength of a research thread."
+  (if (< (length thread) 2)
+      0.0
+    (let ((total-strength 0.0)
+          (connections 0))
+      (dotimes (i (1- (length thread)))
+        (let ((strength (hp/org-roam-calculate-connection-strength 
+                        (nth i thread) (nth (1+ i) thread))))
+          (setq total-strength (+ total-strength strength))
+          (setq connections (1+ connections))))
+      (if (> connections 0)
+          (/ total-strength connections)
+        0.0))))
+
+(defun hp/org-roam-export-thread-graph (thread-key)
+  "Export a research thread as a visual graph."
+  (interactive 
+   (list (completing-read "Thread to export: " 
+                         (hash-table-keys hp/org-roam-current-threads))))
+  (let* ((thread (gethash thread-key hp/org-roam-current-threads))
+         (graph-file (expand-file-name 
+                     (format "thread-%s.dot" thread-key) 
+                     temporary-file-directory)))
+    (with-temp-file graph-file
+      (insert "digraph ResearchThread {\n")
+      (insert "  rankdir=LR;\n")
+      (insert "  node [shape=box, style=filled];\n")
+      
+      (dotimes (i (length thread))
+        (let* ((node (nth i thread))
+               (title (org-roam-node-title node))
+               (clean-title (replace-regexp-in-string "[^a-zA-Z0-9]" "_" title)))
+          (insert (format "  %s [label=\"%s\"];\n" clean-title title))
+          (when (< i (1- (length thread)))
+            (let* ((next-node (nth (1+ i) thread))
+                   (next-title (org-roam-node-title next-node))
+                   (next-clean (replace-regexp-in-string "[^a-zA-Z0-9]" "_" next-title)))
+              (insert (format "  %s -> %s;\n" clean-title next-clean))))))
+      
+      (insert "}\n"))
+    
+    (message "Thread graph exported to: %s" graph-file)
+    (when (executable-find "dot")
+      (let ((png-file (replace-regexp-in-string "\\.dot$" ".png" graph-file)))
+        (shell-command (format "dot -Tpng %s -o %s" graph-file png-file))
+        (message "PNG graph created: %s" png-file)))))
+
+(defvar hp/org-roam-current-threads (make-hash-table :test 'equal)
+  "Currently identified research threads.")
+
+;; Store threads globally for export functionality
+(advice-add 'hp/org-roam-visualize-threads :before
+            (lambda (threads)
+              (setq hp/org-roam-current-threads threads)))
+#+end_src
 
 ***** Org-download configuration
 #+begin_src emacs-lisp
@@ -1504,8 +2742,50 @@ Sorting =org-roam-node-find= by last modified time seems the most intuitive for 
         :prefix "n"
         (:prefix ("r" . "roam")
          (:prefix ("t" . "tools")
+          ;; File management tools
           :desc "Rename roam files" "r" #'hp/org-roam-rename-files
-          :desc "Flatten roam files" "f" #'hp/org-roam-flatten-files)
+          :desc "Flatten roam files" "f" #'hp/org-roam-flatten-files
+          
+          ;; Semantic links
+          (:prefix ("s" . "semantic links")
+           :desc "Insert semantic link" "l" #'hp/org-roam-insert-semantic-link
+           :desc "Show relationship graph" "g" #'hp/org-roam-show-relationship-graph
+           :desc "Find by relationship" "f" #'hp/org-roam-find-by-relationship
+           :desc "Relationship stats" "s" #'hp/org-roam-get-relationship-stats)
+          
+          ;; Clustering & tagging
+          (:prefix ("c" . "clustering")
+           :desc "Auto-tag current node" "t" #'hp/org-roam-auto-tag-current-node
+           :desc "Find similar nodes" "s" #'hp/org-roam-find-similar-nodes
+           :desc "Cluster analysis" "c" #'hp/org-roam-cluster-analysis
+           :desc "Update tag weights" "w" #'hp/org-roam-update-tag-weights)
+          
+          ;; Time-based decay & refresh
+          (:prefix ("d" . "decay & refresh")
+           :desc "Find stale links" "s" #'hp/org-roam-find-stale-links
+           :desc "Refresh node timestamp" "r" #'hp/org-roam-refresh-node-timestamp
+           :desc "Weighted node search" "w" #'hp/org-roam-weighted-node-search
+           :desc "Colorize links by age" "c" #'hp/org-roam-colorize-links-by-age
+           :desc "Cleanup stale content" "x" #'hp/org-roam-cleanup-stale-content)
+          
+          ;; Enhanced capture
+          (:prefix ("e" . "enhanced capture")
+           :desc "Context-aware capture" "c" #'hp/org-roam-enhanced-capture
+           :desc "Show current context" "s" (lambda () (interactive) 
+                                               (hp/org-roam-show-capture-context 
+                                                (hp/org-roam-get-current-context) '() '())))
+          
+          ;; Multi-dimensional navigation
+          (:prefix ("n" . "navigation")
+           :desc "Navigate by dimension" "d" #'hp/org-roam-navigate-by-dimension
+           :desc "Navigation dashboard" "D" #'hp/org-roam-create-navigation-dashboard
+           :desc "Spatial navigation" "s" #'hp/org-roam-spatial-navigation)
+          
+          ;; Research thread visualization
+          (:prefix ("v" . "visualization")
+           :desc "Identify research threads" "t" #'hp/org-roam-identify-research-threads
+           :desc "Export thread graph" "e" #'hp/org-roam-export-thread-graph))
+         
          :desc "Capture web page" "w" (lambda () (interactive) (org-roam-capture- :keys "w"))))
 
 ;; Custom function to open Obsidian vault with treemacs
