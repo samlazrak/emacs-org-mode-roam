@@ -3201,4 +3201,4 @@ This function is meant to clean out empty org-roam-dailies files."
         :i "C-c C-z" #'other-window))
 
 ;; Load elfeed configuration
-(load! "elfeed-config")
+(load! "modules/hp-elfeed.el")

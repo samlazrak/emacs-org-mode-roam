@@ -4296,6 +4296,6 @@ Rudimentary =matlab-mode= setups.
 
 #+begin_src emacs-lisp
 ;; Load elfeed configuration
-(load! "elfeed-config")
+(load! "modules/hp-elfeed.el")
 #+end_src
 
