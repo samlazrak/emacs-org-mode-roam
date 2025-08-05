@@ -1868,6 +1868,134 @@ If RECURSIVE is non-nil, process subdirectories as well."
   ;; Just call the regular function with recursive flag set to t
   (hp/obsidian-to-org-convert-directory directory t))
 
+(defun hp/obsidian-to-org-generate-indices (directory)
+  "Generate index.org files recursively and move single files up to parent directories."
+  (interactive "DDirectory: ")
+  (let ((moved-files 0)
+        (created-indices 0))
+    
+    ;; First pass: Move single files up to parent directory
+    (hp/obsidian-to-org--consolidate-single-files directory)
+    
+    ;; Second pass: Create index files for all directories with content
+    (hp/obsidian-to-org--create-indices-recursive directory)
+    
+    ;; Update org-roam database
+    (org-roam-db-sync)
+    
+    (message "Reorganized directory structure and created index files")))
+
+(defun hp/obsidian-to-org--consolidate-single-files (directory)
+  "Move files from directories containing only one file up to parent directory."
+  (let ((all-dirs (seq-filter #'file-directory-p 
+                             (directory-files-recursively directory "." t))))
+    ;; Process from deepest to shallowest
+    (dolist (dir (sort all-dirs (lambda (a b) (> (length a) (length b)))))
+      (let* ((files (directory-files dir t "^[^.].*\\.org$"))
+             (non-index-files (seq-remove (lambda (f) 
+                                           (string= (file-name-nondirectory f) "index.org"))
+                                         files)))
+        (when (= (length non-index-files) 1)
+          ;; Move the single file to parent directory
+          (let* ((file (car non-index-files))
+                 (parent-dir (file-name-directory (directory-file-name dir)))
+                 (new-path (expand-file-name (file-name-nondirectory file) parent-dir)))
+            (unless (file-exists-p new-path)
+              (rename-file file new-path)
+              (message "Moved %s to %s" (file-name-nondirectory file) parent-dir))
+            ;; Remove empty directory
+            (when (= (length (directory-files dir t "^[^.]")) 0)
+              (delete-directory dir))))))))
+
+(defun hp/obsidian-to-org--create-indices-recursive (directory &optional parent-level)
+  "Create index.org files recursively for DIRECTORY and all subdirectories."
+  (let ((level (or parent-level 0)))
+    ;; Get all files and subdirectories in current directory
+    (let* ((all-files (directory-files directory t "^[^.]"))
+           (org-files (seq-filter (lambda (f) 
+                                   (and (string-match-p "\\.org$" f)
+                                        (not (string= (file-name-nondirectory f) "index.org"))))
+                                 all-files))
+           (subdirs (seq-filter #'file-directory-p all-files)))
+      
+      ;; Only create index if there are org files or subdirectories
+      (when (or org-files subdirs)
+        (let ((index-file (expand-file-name "index.org" directory))
+              (dir-name (file-name-nondirectory (directory-file-name directory))))
+          
+          (with-temp-file index-file
+            ;; Add org-roam properties
+            (insert ":PROPERTIES:\n")
+            (insert (format ":ID:       %s\n" (org-id-new)))
+            (insert ":END:\n")
+            (insert (format "#+title: %s\n\n" (capitalize (replace-regexp-in-string "-" " " dir-name))))
+            
+            ;; Add ID links to files in current directory
+            (dolist (file (sort org-files #'string<))
+              (let ((id nil)
+                    (title (file-name-sans-extension (file-name-nondirectory file))))
+                ;; Extract ID and title from the file
+                (when (file-exists-p file)
+                  (with-temp-buffer
+                    (insert-file-contents file nil 0 1000) ; Read more to ensure we get the ID
+                    ;; Extract ID
+                    (goto-char (point-min))
+                    (when (re-search-forward "^:ID:\\s-+\\([a-zA-Z0-9-]+\\)" nil t)
+                      (setq id (match-string 1)))
+                    ;; Extract title
+                    (goto-char (point-min))
+                    (when (re-search-forward "^#\\+title:\\s-*\\(.+\\)$" nil t)
+                      (setq title (match-string 1)))))
+                ;; Write the ID link
+                (when id
+                  (insert (format "[[id:%s][%s]]\n" id title)))))
+            
+            ;; Add links to subdirectory indices
+            (when subdirs
+              (insert "\n")
+              (dolist (subdir (sort subdirs #'string<))
+                (let ((subdir-index (expand-file-name "index.org" subdir))
+                      (subdir-name (file-name-nondirectory (directory-file-name subdir))))
+                  ;; Check if subdirectory will have an index
+                  (when (or (directory-files subdir nil "\\.org$")
+                           (seq-filter #'file-directory-p 
+                                      (directory-files subdir t "^[^.]")))
+                    ;; Extract ID from the subdirectory index if it exists
+                    (let ((subdir-id nil)
+                          (subdir-title (capitalize (replace-regexp-in-string "-" " " subdir-name))))
+                      (when (file-exists-p subdir-index)
+                        (with-temp-buffer
+                          (insert-file-contents subdir-index nil 0 500)
+                          (when (re-search-forward "^:ID:\\s-+\\([a-zA-Z0-9-]+\\)" nil t)
+                            (setq subdir-id (match-string 1)))))
+                      ;; If no ID yet, we'll need to process subdirs first
+                      (unless subdir-id
+                        ;; Process subdir first to create its index
+                        (hp/obsidian-to-org--create-indices-recursive subdir (1+ level))
+                        ;; Now try to get the ID again
+                        (when (file-exists-p subdir-index)
+                          (with-temp-buffer
+                            (insert-file-contents subdir-index nil 0 500)
+                            (when (re-search-forward "^:ID:\\s-+\\([a-zA-Z0-9-]+\\)" nil t)
+                              (setq subdir-id (match-string 1))))))
+                      (when subdir-id
+                        (insert (format "[[id:%s][%s]]\n" subdir-id subdir-title)))))))))
+          
+          (message "Created index for %s (level %d)" dir-name level)))
+      
+      ;; Process remaining subdirectories
+      (dolist (subdir subdirs)
+        (unless (file-exists-p (expand-file-name "index.org" subdir))
+          (hp/obsidian-to-org--create-indices-recursive subdir (1+ level)))))))
+
+(defun hp/obsidian-to-org-convert-and-index (directory)
+  "Convert all Obsidian files in DIRECTORY recursively and generate index.org files."
+  (interactive "DDirectory: ")
+  ;; First convert all markdown files
+  (hp/obsidian-to-org-convert-directory-recursive directory)
+  ;; Then generate indices
+  (hp/obsidian-to-org-generate-indices hp/obsidian-org-output-dir))
+
 (defun hp/obsidian-to-org--copy-attachments (source-dir dest-dir)
   "Copy attachment directories from SOURCE-DIR to DEST-DIR."
   (dolist (attach-dir hp/obsidian-attachment-dirs)
@@ -1916,6 +2044,8 @@ If RECURSIVE is non-nil, process subdirectories as well."
         :desc "Import single file" "f" #'hp/obsidian-to-org-convert-file
         :desc "Import directory" "d" #'hp/obsidian-to-org-convert-directory
         :desc "Import directory (recursive)" "D" #'hp/obsidian-to-org-convert-directory-recursive
+        :desc "Generate index files" "i" #'hp/obsidian-to-org-generate-indices
+        :desc "Convert & index (recursive)" "I" #'hp/obsidian-to-org-convert-and-index
         :desc "Start auto sync" "s" #'hp/obsidian-to-org-auto-sync
         :desc "Stop auto sync" "S" #'hp/obsidian-to-org-stop-auto-sync)))
 #+end_src
