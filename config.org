@@ -1862,6 +1862,12 @@ If RECURSIVE is non-nil, process subdirectories as well."
     (dolist (error errors)
       (message "Error converting %s: %s" (car error) (cdr error)))))
 
+(defun hp/obsidian-to-org-convert-directory-recursive (directory)
+  "Convert all Obsidian markdown files in DIRECTORY and all subdirectories to org-mode."
+  (interactive "DDirectory: ")
+  ;; Just call the regular function with recursive flag set to t
+  (hp/obsidian-to-org-convert-directory directory t))
+
 (defun hp/obsidian-to-org--copy-attachments (source-dir dest-dir)
   "Copy attachment directories from SOURCE-DIR to DEST-DIR."
   (dolist (attach-dir hp/obsidian-attachment-dirs)
@@ -1909,6 +1915,7 @@ If RECURSIVE is non-nil, process subdirectories as well."
         :desc "Import current buffer" "b" #'hp/obsidian-to-org-convert-buffer
         :desc "Import single file" "f" #'hp/obsidian-to-org-convert-file
         :desc "Import directory" "d" #'hp/obsidian-to-org-convert-directory
+        :desc "Import directory (recursive)" "D" #'hp/obsidian-to-org-convert-directory-recursive
         :desc "Start auto sync" "s" #'hp/obsidian-to-org-auto-sync
         :desc "Stop auto sync" "S" #'hp/obsidian-to-org-stop-auto-sync)))
 #+end_src
