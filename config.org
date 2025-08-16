@@ -2,12 +2,28 @@
 :ID:       21f80d7d-00f7-4959-9ea2-d7e4b680b272
 :END:
 #+title: My Doom Emacs configuration
-#+PROPERTY: header-args:emacs-lisp :tangle config.el
 #+startup: hideblocks content
 #+filetags: :compilation:tool:blogs:
 #+date: {{{modification-time(%Y-%m-%d)}}}
 #+export_file_name: Doom-Emacs-config.md
 #+options: toc:5 num:t H:5
+
+* Introduction :ignore:
+Emacs is certainly a strange piece of software.
+It was created in the 1970s and is still in active development until this day, preserving weird concepts like "buffers" and "frame" and "fontification" in its documentation.
+It calls the button =Ctrl= on modern keyboards as ~C~ and the =Alt= button as ~M~ (Meta).
+In default settings, you copy text by pressing ~M-w~ , "kill" (in modern language: cut) by ~C-w~, and paste by ~C-y~.
+In order to customize Emacs, you need to use a dedicated programming language called Emacs Lisp.
+
+But despite all that, Emacs has become the central piece of software that I use to interact with my computer.
+It's still just an text editor, but the one that you can spend hours to fine-tune it just the way you want it to be.
+In my journey to learn Emacs, I also learnt a lot about how my computer works.
+Along the way, I learnt how to code and I learnt how to write.
+These days, I learn about stuffs beyond the computer, yet Emacs is still my friend.
+
+This document describes how I set up my Emacs, in [[https://en.wikipedia.org/wiki/Literate_programming][literate programming]] style, using a plain text format closely related to Emacs called [[https://orgmode.org/][Org-mode]].
+The whole thing is contained in a [[https://raw.githubusercontent.com/hieutkt/dotfiles/main/emacs/.doom.d/config.org][single file]], from which both the Elisp code and this HTML document is generated.
+This Emacs configuration is built based on a configuration framework called [[https://github.com/doomemacs/][Doom Emacs]], hence the name of this document.
 
 * Prerequisites
 ** Reproducible information
@@ -52,6 +68,7 @@ system-configuration-features
 ;; clients, file templates and snippets.
 (setq user-full-name "Sam Lazrak"
       user-mail-address "24284329+samlazrak@users.noreply.github.com"
+      ;;default-input-method 'vietnamese-telex
       +doom-dashboard-banner-dir doom-user-dir
       +doom-dashboard-banner-file "emacse.svg"
       +doom-dashboard-banner-size 400
@@ -74,18 +91,8 @@ system-configuration-features
     (setq dropbox-directory "/mnt/c/Users/m3/Dropbox/")
   (setq dropbox-directory "~/Dropbox/"))
 
-(setq org-directory "~/org")
+(setq org-directory (concat dropbox-directory "Notes/"))
 
-;; Add org-roam tools to PATH
-(setenv "PATH" (concat (expand-file-name "~/org/roam/tools/bin") ":" (getenv "PATH")))
-(add-to-list 'exec-path (expand-file-name "~/org/roam/tools/bin"))
-
-;; Use POSIX shell for internal Emacs processes to avoid issues with non-POSIX shells
-;;(setq shell-file-name (executable-find "bash"))
-
-;; But use Fish for terminal emulators
-(setq-default vterm-shell "/opt/homebrew/bin/fish")
-(setq-default explicit-shell-file-name "/opt/homebrew/bin/fish")
 
 ;; This determines the style of line numbers in effect. If set to `nil', line
 ;; numbers are disabled. For relative line numbers, set this to `relative'.
@@ -355,1840 +362,1042 @@ There is also an =auto-olivetti-mode=  which automatically turns on =olivetti-mo
   
   (auto-olivetti-mode))
 #+end_src
-** Icons
-Some nerd-icons related stuffs
+** Git gutter
+The =diff= changes are reflected in the left fringe.
+However, I find them to be a little bit too intrusive, so let's change how they looks by blending the colors into the background a little bit
 
 #+begin_src emacs-lisp
-(use-package! nerd-icons-ibuffer
-  :ensure t
-  :hook (ibuffer-mode . nerd-icons-ibuffer-mode))
-
-;; (use-package! magit-file-icons
-;;   :init
-;;   (magit-file-icons-mode 1))
-#+end_src
-
-** Slightly transparent Emacs
-Emacs version 29 added a new frame parameter for "true" transparency, which means that only the blackground is transparent while the text is not.
-
-#+begin_src emacs-lisp :tangle no
-(add-to-list 'default-frame-alist '(alpha-background . 96))
-#+end_src
-
-I set Emacs to be slightly transparent.
-With this setting, I can put Emacs at full screen while still being able to read from the windows behind it.
-This is very useful when screen real-estate is scarce (which is always the case!)
-** Modeline
-Some tweaks to =doom-modeline=:
-#+begin_src emacs-lisp
-(setq doom-modeline-height 35)
-#+end_src
-
-Show page number when viewing PDFs:
-
-#+begin_src emacs-lisp
-(doom-modeline-def-segment buffer-name
-  "Display the current buffer's name, without any other information."
-  (concat
-   doom-modeline-spc
-   (doom-modeline--buffer-name)))
-
-(doom-modeline-def-segment pdf-icon
-  "PDF icon from nerd-icons."
-  (concat
-   doom-modeline-spc
-   (doom-modeline-icon 'mdicon "nf-md-file_pdf_box" nil nil
-                       :face (if (doom-modeline--active)
-                                 'nerd-icons-red
-                               'mode-line-inactive))))
-
-(defun doom-modeline-update-pdf-pages ()
-  "Update PDF pages."
-  (setq doom-modeline--pdf-pages
-        (let ((current-page-str (number-to-string (eval `(pdf-view-current-page))))
-              (total-page-str (number-to-string (pdf-cache-number-of-pages))))
-          (concat
-           (propertize
-            (concat (make-string (- (length total-page-str) (length current-page-str)) ? )
-                    " P" current-page-str)
-            'face 'mode-line)
-           (propertize (concat "/" total-page-str) 'face 'doom-modeline-buffer-minor-mode)))))
-
-(doom-modeline-def-segment pdf-pages
-  "Display PDF pages."
-  (if (doom-modeline--active) doom-modeline--pdf-pages
-    (propertize doom-modeline--pdf-pages 'face 'mode-line-inactive)))
-
-(doom-modeline-def-modeline 'pdf
-  '(bar window-number pdf-pages pdf-icon buffer-name)
-  '(misc-info matches major-mode process vcs))
-#+end_src
-
-Recent version of [[https://github.com/seagle0128/doom-modeline/pull/622][doom-modeline]] features [[github:rainstormstudio/nerd-icons.el][nerd-icons.el]] instead of [[github:domtronn/all-the-icons.el][all-the-icons.el]].
-I like this change, however different parts of Doom are still using =all-the-icons= under the hood.
-Some custom configurations is needed for now.
-
-#+begin_src emacs-lisp
-(use-package! nerd-icons
-  :custom
-  (nerd-icons-font-family "FiraMono Nerd Font Mono")
-  (nerd-icons-scale-factor 1.2)
-  (nerd-icons-default-adjust 0)
-  (doom-modeline-major-mode-icon t))
-#+end_src
-
-** Narrowing and center buffer contents
-On larger screens I like buffer contents to not exceed a certain width and are centered.
-=olivetti-mode= solves this problem nicely.
-There is also an =auto-olivetti-mode=  which automatically turns on =olivetti-mode= in most buffers.
-
-#+begin_src emacs-lisp
-(use-package! olivetti
+(use-package! diff-hl
   :config
-  (setq-default olivetti-body-width 130)
-  (add-hook 'mixed-pitch-mode-hook  
-            (lambda () 
-              (when (and (bound-and-true-p olivetti-mode)
-                         (or (not (numberp olivetti-body-width))
-                             (eq olivetti-body-width 'unspecified)))
-                (setq-local olivetti-body-width 90)))))
+  (custom-set-faces!
+    `((diff-hl-change)
+      :foreground ,(doom-blend (doom-color 'bg) (doom-color 'blue) 0.5))
+    `((diff-hl-insert)
+      :foreground ,(doom-blend (doom-color 'bg) (doom-color 'green) 0.5)))
+  )
+#+end_src
+** Alignment in popup fix (=which-key= and =marginalia=)
+The default character for ellipsis breaks alignment in =which-key= tables, so let's fix that
 
-(use-package! auto-olivetti
-  :custom
-  (auto-olivetti-enabled-modes '(text-mode prog-mode helpful-mode ibuffer-mode image-mode))
+#+begin_src emacs-lisp
+(use-package! which-key
+  :init
+  (setq which-key-ellipsis "..."))
+
+#+end_src
+
+Similarly for marginalia
+
+#+begin_src emacs-lisp
+(setq marginalia--ellipsis "...")
+#+end_src
+** Precision scrolling
+
+Turn on pixel scrolling:
+
+#+begin_src emacs-lisp
+(pixel-scroll-precision-mode t)
+#+end_src
+
+The following code replace all scrolling and recenter commands with the precision-scrolling version.
+
+#+begin_src emacs-lisp
+(defun hp/pixel-recenter (&optional arg redisplay)
+  "Similar to `recenter' but with pixel scrolling.
+ARG and REDISPLAY are identical to the original function."
+  ;; See the links in line 6676 in window.c for
+  (when-let* ((current-pixel (pixel-posn-y-at-point))
+              (target-pixel (if (numberp arg)
+                                (* (line-pixel-height) arg)
+                              (* 0.5 (window-body-height nil t))))
+              (distance-in-pixels 0)
+              (pixel-scroll-precision-interpolation-total-time
+               (/ pixel-scroll-precision-interpolation-total-time 2.0)))
+    (setq target-pixel
+          (if (<= 0 target-pixel)
+              target-pixel
+            (- (window-body-height nil t) (abs target-pixel))))
+    (setq distance-in-pixels (- target-pixel current-pixel))
+    (condition-case err
+        (pixel-scroll-precision-interpolate distance-in-pixels nil 1)
+      (error (message "[hp/pixel-recenter] %s" (error-message-string err))))
+    (when redisplay (redisplay t))))
+
+(defun hp/pixel-scroll-up (&optional arg)
+  "(Nearly) drop-in replacement for `scroll-up'."
+  (cond
+   ((eq this-command 'scroll-up-line)
+    (funcall (ad-get-orig-definition 'scroll-up) (or arg 1)))
+   (t
+    (unless (eobp) ; Jittery window if trying to go down when already at bottom
+      (pixel-scroll-precision-interpolate
+       (- (* (line-pixel-height)
+             (or arg (- (window-text-height) next-screen-context-lines))))
+       nil 1)))))
+
+(defun hp/pixel-scroll-down (&optional arg)
+  "(Nearly) drop-in replacement for `scroll-down'."
+  (cond
+   ((eq this-command 'scroll-down-line)
+    (funcall (ad-get-orig-definition 'scroll-down) (or arg 1)))
+   (t
+    (pixel-scroll-precision-interpolate
+     (* (line-pixel-height)
+        (or arg (- (window-text-height) next-screen-context-lines)))
+     nil 1))))
+
+(add-hook 'pixel-scroll-precision-mode-hook
+          (lambda ()
+            (cond
+             (pixel-scroll-precision-mode
+              (advice-add 'scroll-up :override 'hp/pixel-scroll-up)
+              (advice-add 'scroll-down :override 'hp/pixel-scroll-down)
+              (advice-add 'recenter :override 'hp/pixel-recenter))
+             (t
+              (advice-remove 'scroll-up 'hp/pixel-scroll-up)
+              (advice-remove 'scroll-down 'hp/pixel-scroll-down)
+              (advice-remove 'recenter 'hp/pixel-recenter)))))
+#+end_src
+
+* Editing configurations
+** Handy functions
+The =hp/fill-to-end= function function in Emacs Lisp fills the remaining space on the current line with a specified character until the line reaches the column defined by =fill-column=.
+When executed interactively, the function prompts the user to input the character to be used for filling.
+The cursor position is temporarily saved and restored to its original location after the line is filled.
+
+#+begin_src emacs-lisp
+(defun hp/fill-to-end (char)
+  (interactive "cFill Character:")
+  (save-excursion
+    (end-of-line)
+    (while (< (current-column) fill-column)
+      (insert-char char))))
+#+end_src
+
+** Evil
+#+begin_src emacs-lisp
+(use-package! evil
+  :init
+  (setq evil-move-beyond-eol t
+        evil-move-cursor-back nil))
+
+(use-package! evil-escape
   :config
-  ;; Fix for olivetti-body-width being set to 'unspecified
-  (defadvice! +olivetti-fix-unspecified-width-a (&rest _)
-    "Fix olivetti-body-width when it gets set to 'unspecified."
-    :before #'olivetti-set-window
-    (when (or (not (numberp olivetti-body-width))
-              (eq olivetti-body-width 'unspecified))
-      (setq-local olivetti-body-width 130)))
-  
-  ;; Remove the error handling approach and try a different strategy
-  ;; This wrapper suppresses the error messages while preserving functionality
-  (defun olivetti--suppress-errors (orig-fn &rest args)
-    "Suppress olivetti error messages."
-    (let ((inhibit-message t)
-          (message-log-max nil))
-      (condition-case nil
-          (apply orig-fn args)
-        (error nil))))
-  
-  ;; Apply error suppression to the functions that generate errors
-  (advice-add 'olivetti-set-window :around #'olivetti--suppress-errors)
-  (advice-add 'olivetti-normalize-width :around #'olivetti--suppress-errors)
-  
-  (auto-olivetti-mode))
-#+end_src
-** Icons
-Some nerd-icons related stuffs
+  (setq evil-esc-delay 0.25))
 
-#+begin_src emacs-lisp
-(use-package! nerd-icons-ibuffer
-  :ensure t
-  :hook (ibuffer-mode . nerd-icons-ibuffer-mode))
-
-;; (use-package! magit-file-icons
-;;   :init
-;;   (magit-file-icons-mode 1))
-#+end_src
-
-** Slightly transparent Emacs
-Emacs version 29 added a new frame parameter for "true" transparency, which means that only the blackground is transparent while the text is not.
-
-#+begin_src emacs-lisp :tangle no
-(add-to-list 'default-frame-alist '(alpha-background . 96))
-#+end_src
-
-I set Emacs to be slightly transparent.
-With this setting, I can put Emacs at full screen while still being able to read from the windows behind it.
-This is very useful when screen real-estate is scarce (which is always the case!)
-** Modeline
-Some tweaks to =doom-modeline=:
-#+begin_src emacs-lisp
-(setq doom-modeline-height 35)
-#+end_src
-
-Show page number when viewing PDFs:
-
-#+begin_src emacs-lisp
-(doom-modeline-def-segment buffer-name
-  "Display the current buffer's name, without any other information."
-  (concat
-   doom-modeline-spc
-   (doom-modeline--buffer-name)))
-
-(doom-modeline-def-segment pdf-icon
-  "PDF icon from nerd-icons."
-  (concat
-   doom-modeline-spc
-   (doom-modeline-icon 'mdicon "nf-md-file_pdf_box" nil nil
-                       :face (if (doom-modeline--active)
-                                 'nerd-icons-red
-                               'mode-line-inactive))))
-
-(defun doom-modeline-update-pdf-pages ()
-  "Update PDF pages."
-  (setq doom-modeline--pdf-pages
-        (let ((current-page-str (number-to-string (eval `(pdf-view-current-page))))
-              (total-page-str (number-to-string (pdf-cache-number-of-pages))))
-          (concat
-           (propertize
-            (concat (make-string (- (length total-page-str) (length current-page-str)) ? )
-                    " P" current-page-str)
-            'face 'mode-line)
-           (propertize (concat "/" total-page-str) 'face 'doom-modeline-buffer-minor-mode)))))
-
-(doom-modeline-def-segment pdf-pages
-  "Display PDF pages."
-  (if (doom-modeline--active) doom-modeline--pdf-pages
-    (propertize doom-modeline--pdf-pages 'face 'mode-line-inactive)))
-
-(doom-modeline-def-modeline 'pdf
-  '(bar window-number pdf-pages pdf-icon buffer-name)
-  '(misc-info matches major-mode process vcs))
-#+end_src
-
-Recent version of [[https://github.com/seagle0128/doom-modeline/pull/622][doom-modeline]] features [[github:rainstormstudio/nerd-icons.el][nerd-icons.el]] instead of [[github:domtronn/all-the-icons.el][all-the-icons.el]].
-I like this change, however different parts of Doom are still using =all-the-icons= under the hood.
-Some custom configurations is needed for now.
-
-#+begin_src emacs-lisp
-(use-package! nerd-icons
-  :custom
-  (nerd-icons-font-family "FiraMono Nerd Font Mono")
-  (nerd-icons-scale-factor 1.2)
-  (nerd-icons-default-adjust 0)
-  (doom-modeline-major-mode-icon t))
-#+end_src
-
-** Narrowing and center buffer contents
-On larger screens I like buffer contents to not exceed a certain width and are centered.
-=olivetti-mode= solves this problem nicely.
-There is also an =auto-olivetti-mode=  which automatically turns on =olivetti-mode= in most buffers.
-
-#+begin_src emacs-lisp
-(use-package! olivetti
+(use-package! evil-vimish-fold
   :config
-  (setq-default olivetti-body-width 130)
-  (add-hook 'mixed-pitch-mode-hook  
-            (lambda () 
-              (when (and (bound-and-true-p olivetti-mode)
-                         (or (not (numberp olivetti-body-width))
-                             (eq olivetti-body-width 'unspecified)))
-                (setq-local olivetti-body-width 90)))))
+  (global-evil-vimish-fold-mode))
 
-(use-package! auto-olivetti
-  :custom
-  (auto-olivetti-enabled-modes '(text-mode prog-mode helpful-mode ibuffer-mode image-mode))
+(use-package! evil-goggles
+  :init
+  (setq evil-goggles-enable-change t
+        evil-goggles-enable-delete t
+        evil-goggles-pulse         t
+        evil-goggles-duration      0.5)
   :config
-  ;; Fix for olivetti-body-width being set to 'unspecified
-  (defadvice! +olivetti-fix-unspecified-width-a (&rest _)
-    "Fix olivetti-body-width when it gets set to 'unspecified."
-    :before #'olivetti-set-window
-    (when (or (not (numberp olivetti-body-width))
-              (eq olivetti-body-width 'unspecified))
-      (setq-local olivetti-body-width 130)))
-  
-  ;; Remove the error handling approach and try a different strategy
-  ;; This wrapper suppresses the error messages while preserving functionality
-  (defun olivetti--suppress-errors (orig-fn &rest args)
-    "Suppress olivetti error messages."
-    (let ((inhibit-message t)
-          (message-log-max nil))
-      (condition-case nil
-          (apply orig-fn args)
-        (error nil))))
-  
-  ;; Apply error suppression to the functions that generate errors
-  (advice-add 'olivetti-set-window :around #'olivetti--suppress-errors)
-  (advice-add 'olivetti-normalize-width :around #'olivetti--suppress-errors)
-  
-  (auto-olivetti-mode))
+  (custom-set-faces!
+    `((evil-goggles-yank-face evil-goggles-surround-face)
+      :background ,(doom-blend (doom-color 'blue) (doom-color 'bg-alt) 0.5)
+      :extend t)
+    `(evil-goggles-paste-face
+      :background ,(doom-blend (doom-color 'green) (doom-color 'bg-alt) 0.5)
+      :extend t)
+    `(evil-goggles-delete-face
+      :background ,(doom-blend (doom-color 'red) (doom-color 'bg-alt) 0.5)
+      :extend t)
+    `(evil-goggles-change-face
+      :background ,(doom-blend (doom-color 'orange) (doom-color 'bg-alt) 0.5)
+      :extend t)
+    `(evil-goggles-commentary-face
+      :background ,(doom-blend (doom-color 'grey) (doom-color 'bg-alt) 0.5)
+      :extend t)
+    `((evil-goggles-indent-face evil-goggles-join-face evil-goggles-shift-face)
+      :background ,(doom-blend (doom-color 'yellow) (doom-color 'bg-alt) 0.25)
+      :extend t)
+    ))
 #+end_src
-** Icons
-Some nerd-icons related stuffs
+*** Hack: load evil keybindings
+For some reasons =evil= keybindings are usually not loaded along with emacs.
+The simple solution is forcing emacs to load this file.
 
 #+begin_src emacs-lisp
-(use-package! nerd-icons-ibuffer
-  :ensure t
-  :hook (ibuffer-mode . nerd-icons-ibuffer-mode))
-
-;; (use-package! magit-file-icons
-;;   :init
-;;   (magit-file-icons-mode 1))
-#+end_src
-
-** Slightly transparent Emacs
-Emacs version 29 added a new frame parameter for "true" transparency, which means that only the blackground is transparent while the text is not.
-
-#+begin_src emacs-lisp :tangle no
-(add-to-list 'default-frame-alist '(alpha-background . 96))
-#+end_src
-
-I set Emacs to be slightly transparent.
-With this setting, I can put Emacs at full screen while still being able to read from the windows behind it.
-This is very useful when screen real-estate is scarce (which is always the case!)
-** Modeline
-Some tweaks to =doom-modeline=:
-#+begin_src emacs-lisp
-(setq doom-modeline-height 35)
-#+end_src
-
-Show page number when viewing PDFs:
-
-#+begin_src emacs-lisp
-(doom-modeline-def-segment buffer-name
-  "Display the current buffer's name, without any other information."
-  (concat
-   doom-modeline-spc
-   (doom-modeline--buffer-name)))
-
-(doom-modeline-def-segment pdf-icon
-  "PDF icon from nerd-icons."
-  (concat
-   doom-modeline-spc
-   (doom-modeline-icon 'mdicon "nf-md-file_pdf_box" nil nil
-                       :face (if (doom-modeline--active)
-                                 'nerd-icons-red
-                               'mode-line-inactive))))
-
-(defun doom-modeline-update-pdf-pages ()
-  "Update PDF pages."
-  (setq doom-modeline--pdf-pages
-        (let ((current-page-str (number-to-string (eval `(pdf-view-current-page))))
-              (total-page-str (number-to-string (pdf-cache-number-of-pages))))
-          (concat
-           (propertize
-            (concat (make-string (- (length total-page-str) (length current-page-str)) ? )
-                    " P" current-page-str)
-            'face 'mode-line)
-           (propertize (concat "/" total-page-str) 'face 'doom-modeline-buffer-minor-mode)))))
-
-(doom-modeline-def-segment pdf-pages
-  "Display PDF pages."
-  (if (doom-modeline--active) doom-modeline--pdf-pages
-    (propertize doom-modeline--pdf-pages 'face 'mode-line-inactive)))
-
-(doom-modeline-def-modeline 'pdf
-  '(bar window-number pdf-pages pdf-icon buffer-name)
-  '(misc-info matches major-mode process vcs))
-#+end_src
-
-Recent version of [[https://github.com/seagle0128/doom-modeline/pull/622][doom-modeline]] features [[github:rainstormstudio/nerd-icons.el][nerd-icons.el]] instead of [[github:domtronn/all-the-icons.el][all-the-icons.el]].
-I like this change, however different parts of Doom are still using =all-the-icons= under the hood.
-Some custom configurations is needed for now.
-
-#+begin_src emacs-lisp
-(use-package! nerd-icons
-  :custom
-  (nerd-icons-font-family "FiraMono Nerd Font Mono")
-  (nerd-icons-scale-factor 1.2)
-  (nerd-icons-default-adjust 0)
-  (doom-modeline-major-mode-icon t))
-#+end_src
-
-** Narrowing and center buffer contents
-On larger screens I like buffer contents to not exceed a certain width and are centered.
-=olivetti-mode= solves this problem nicely.
-There is also an =auto-olivetti-mode=  which automatically turns on =olivetti-mode= in most buffers.
-
-#+begin_src emacs-lisp
-(use-package! olivetti
-  :config
-  (setq-default olivetti-body-width 130)
-  (add-hook 'mixed-pitch-mode-hook  
-            (lambda () 
-              (when (and (bound-and-true-p olivetti-mode)
-                         (or (not (numberp olivetti-body-width))
-                             (eq olivetti-body-width 'unspecified)))
-                (setq-local olivetti-body-width 90)))))
-
-(use-package! auto-olivetti
-  :custom
-  (auto-olivetti-enabled-modes '(text-mode prog-mode helpful-mode ibuffer-mode image-mode))
-  :config
-  ;; Fix for olivetti-body-width being set to 'unspecified
-  (defadvice! +olivetti-fix-unspecified-width-a (&rest _)
-    "Fix olivetti-body-width when it gets set to 'unspecified."
-    :before #'olivetti-set-window
-    (when (or (not (numberp olivetti-body-width))
-              (eq olivetti-body-width 'unspecified))
-      (setq-local olivetti-body-width 130)))
-  
-  ;; Remove the error handling approach and try a different strategy
-  ;; This wrapper suppresses the error messages while preserving functionality
-  (defun olivetti--suppress-errors (orig-fn &rest args)
-    "Suppress olivetti error messages."
-    (let ((inhibit-message t)
-          (message-log-max nil))
-      (condition-case nil
-          (apply orig-fn args)
-        (error nil))))
-  
-  ;; Apply error suppression to the functions that generate errors
-  (advice-add 'olivetti-set-window :around #'olivetti--suppress-errors)
-  (advice-add 'olivetti-normalize-width :around #'olivetti--suppress-errors)
-  
-  (auto-olivetti-mode))
-#+end_src
-** Icons
-Some nerd-icons related stuffs
-
-#+begin_src emacs-lisp
-(use-package! nerd-icons-ibuffer
-  :ensure t
-  :hook (ibuffer-mode . nerd-icons-ibuffer-mode))
-
-;; (use-package! magit-file-icons
-;;   :init
-;;   (magit-file-icons-mode 1))
-#+end_src
-
-** Slightly transparent Emacs
-Emacs version 29 added a new frame parameter for "true" transparency, which means that only the blackground is transparent while the text is not.
-
-#+begin_src emacs-lisp :tangle no
-(add-to-list 'default-frame-alist '(alpha-background . 96))
-#+end_src
-
-I set Emacs to be slightly transparent.
-With this setting, I can put Emacs at full screen while still being able to read from the windows behind it.
-This is very useful when screen real-estate is scarce (which is always the case!)
-** Modeline
-Some tweaks to =doom-modeline=:
-#+begin_src emacs-lisp
-(setq doom-modeline-height 35)
-#+end_src
-
-Show page number when viewing PDFs:
-
-#+begin_src emacs-lisp
-(doom-modeline-def-segment buffer-name
-  "Display the current buffer's name, without any other information."
-  (concat
-   doom-modeline-spc
-   (doom-modeline--buffer-name)))
-
-(doom-modeline-def-segment pdf-icon
-  "PDF icon from nerd-icons."
-  (concat
-   doom-modeline-spc
-   (doom-modeline-icon 'mdicon "nf-md-file_pdf_box" nil nil
-                       :face (if (doom-modeline--active)
-                                 'nerd-icons-red
-                               'mode-line-inactive))))
-
-(defun doom-modeline-update-pdf-pages ()
-  "Update PDF pages."
-  (setq doom-modeline--pdf-pages
-        (let ((current-page-str (number-to-string (eval `(pdf-view-current-page))))
-              (total-page-str (number-to-string (pdf-cache-number-of-pages))))
-          (concat
-           (propertize
-            (concat (make-string (- (length total-page-str) (length current-page-str)) ? )
-                    " P" current-page-str)
-            'face 'mode-line)
-           (propertize (concat "/" total-page-str) 'face 'doom-modeline-buffer-minor-mode)))))
-
-(doom-modeline-def-segment pdf-pages
-  "Display PDF pages."
-  (if (doom-modeline--active) doom-modeline--pdf-pages
-    (propertize doom-modeline--pdf-pages 'face 'mode-line-inactive)))
-
-(doom-modeline-def-modeline 'pdf
-  '(bar window-number pdf-pages pdf-icon buffer-name)
-  '(misc-info matches major-mode process vcs))
-#+end_src
-
-Recent version of [[https://github.com/seagle0128/doom-modeline/pull/622][doom-modeline]] features [[github:rainstormstudio/nerd-icons.el][nerd-icons.el]] instead of [[github:domtronn/all-the-icons.el][all-the-icons.el]].
-I like this change, however different parts of Doom are still using =all-the-icons= under the hood.
-Some custom configurations is needed for now.
-
-#+begin_src emacs-lisp
-(use-package! nerd-icons
-  :custom
-  (nerd-icons-font-family "FiraMono Nerd Font Mono")
-  (nerd-icons-scale-factor 1.2)
-  (nerd-icons-default-adjust 0)
-  (doom-modeline-major-mode-icon t))
-#+end_src
-
-** Narrowing and center buffer contents
-On larger screens I like buffer contents to not exceed a certain width and are centered.
-=olivetti-mode= solves this problem nicely.
-There is also an =auto-olivetti-mode=  which automatically turns on =olivetti-mode= in most buffers.
-
-#+begin_src emacs-lisp
-(use-package! olivetti
-  :config
-  (setq-default olivetti-body-width 130)
-  (add-hook 'mixed-pitch-mode-hook  
-            (lambda () 
-              (when (and (bound-and-true-p olivetti-mode)
-                         (or (not (numberp olivetti-body-width))
-                             (eq olivetti-body-width 'unspecified)))
-                (setq-local olivetti-body-width 90)))))
-
-(use-package! auto-olivetti
-  :custom
-  (auto-olivetti-enabled-modes '(text-mode prog-mode helpful-mode ibuffer-mode image-mode))
-  :config
-  ;; Fix for olivetti-body-width being set to 'unspecified
-  (defadvice! +olivetti-fix-unspecified-width-a (&rest _)
-    "Fix olivetti-body-width when it gets set to 'unspecified."
-    :before #'olivetti-set-window
-    (when (or (not (numberp olivetti-body-width))
-              (eq olivetti-body-width 'unspecified))
-      (setq-local olivetti-body-width 130)))
-  
-  ;; Remove the error handling approach and try a different strategy
-  ;; This wrapper suppresses the error messages while preserving functionality
-  (defun olivetti--suppress-errors (orig-fn &rest args)
-    "Suppress olivetti error messages."
-    (let ((inhibit-message t)
-          (message-log-max nil))
-      (condition-case nil
-          (apply orig-fn args)
-        (error nil))))
-  
-  ;; Apply error suppression to the functions that generate errors
-  (advice-add 'olivetti-set-window :around #'olivetti--suppress-errors)
-  (advice-add 'olivetti-normalize-width :around #'olivetti--suppress-errors)
-  
-  (auto-olivetti-mode))
-#+end_src
-** Icons
-Some nerd-icons related stuffs
-
-#+begin_src emacs-lisp
-(use-package! nerd-icons-ibuffer
-  :ensure t
-  :hook (ibuffer-mode . nerd-icons-ibuffer-mode))
-
-;; (use-package! magit-file-icons
-;;   :init
-;;   (magit-file-icons-mode 1))
-#+end_src
-
-** Slightly transparent Emacs
-Emacs version 29 added a new frame parameter for "true" transparency, which means that only the blackground is transparent while the text is not.
-
-#+begin_src emacs-lisp :tangle no
-(add-to-list 'default-frame-alist '(alpha-background . 96))
-#+end_src
-
-I set Emacs to be slightly transparent.
-With this setting, I can put Emacs at full screen while still being able to read from the windows behind it.
-This is very useful when screen real-estate is scarce (which is always the case!)
-** Modeline
-Some tweaks to =doom-modeline=:
-#+begin_src emacs-lisp
-(setq doom-modeline-height 35)
-#+end_src
-
-Show page number when viewing PDFs:
-
-#+begin_src emacs-lisp
-(doom-modeline-def-segment buffer-name
-  "Display the current buffer's name, without any other information."
-  (concat
-   doom-modeline-spc
-   (doom-modeline--buffer-name)))
-
-(doom-modeline-def-segment pdf-icon
-  "PDF icon from nerd-icons."
-  (concat
-   doom-modeline-spc
-   (doom-modeline-icon 'mdicon "nf-md-file_pdf_box" nil nil
-                       :face (if (doom-modeline--active)
-                                 'nerd-icons-red
-                               'mode-line-inactive))))
-
-(defun doom-modeline-update-pdf-pages ()
-  "Update PDF pages."
-  (setq doom-modeline--pdf-pages
-        (let ((current-page-str (number-to-string (eval `(pdf-view-current-page))))
-              (total-page-str (number-to-string (pdf-cache-number-of-pages))))
-          (concat
-           (propertize
-            (concat (make-string (- (length total-page-str) (length current-page-str)) ? )
-                    " P" current-page-str)
-            'face 'mode-line)
-           (propertize (concat "/" total-page-str) 'face 'doom-modeline-buffer-minor-mode)))))
-
-(doom-modeline-def-segment pdf-pages
-  "Display PDF pages."
-  (if (doom-modeline--active) doom-modeline--pdf-pages
-    (propertize doom-modeline--pdf-pages 'face 'mode-line-inactive)))
-
-(doom-modeline-def-modeline 'pdf
-  '(bar window-number pdf-pages pdf-icon buffer-name)
-  '(misc-info matches major-mode process vcs))
-#+end_src
-
-Recent version of [[https://github.com/seagle0128/doom-modeline/pull/622][doom-modeline]] features [[github:rainstormstudio/nerd-icons.el][nerd-icons.el]] instead of [[github:domtronn/all-the-icons.el][all-the-icons.el]].
-I like this change, however different parts of Doom are still using =all-the-icons= under the hood.
-Some custom configurations is needed for now.
-
-#+begin_src emacs-lisp
-(use-package! nerd-icons
-  :custom
-  (nerd-icons-font-family "FiraMono Nerd Font Mono")
-  (nerd-icons-scale-factor 1.2)
-  (nerd-icons-default-adjust 0)
-  (doom-modeline-major-mode-icon t))
-#+end_src
-
-** Narrowing and center buffer contents
-On larger screens I like buffer contents to not exceed a certain width and are centered.
-=olivetti-mode= solves this problem nicely.
-There is also an =auto-olivetti-mode=  which automatically turns on =olivetti-mode= in most buffers.
-
-#+begin_src emacs-lisp
-(use-package! olivetti
-  :config
-  (setq-default olivetti-body-width 130)
-  (add-hook 'mixed-pitch-mode-hook  
-            (lambda () 
-              (when (and (bound-and-true-p olivetti-mode)
-                         (or (not (numberp olivetti-body-width))
-                             (eq olivetti-body-width 'unspecified)))
-                (setq-local olivetti-body-width 90)))))
-
-(use-package! auto-olivetti
-  :custom
-  (auto-olivetti-enabled-modes '(text-mode prog-mode helpful-mode ibuffer-mode image-mode))
-  :config
-  ;; Fix for olivetti-body-width being set to 'unspecified
-  (defadvice! +olivetti-fix-unspecified-width-a (&rest _)
-    "Fix olivetti-body-width when it gets set to 'unspecified."
-    :before #'olivetti-set-window
-    (when (or (not (numberp olivetti-body-width))
-              (eq olivetti-body-width 'unspecified))
-      (setq-local olivetti-body-width 130)))
-  
-  ;; Remove the error handling approach and try a different strategy
-  ;; This wrapper suppresses the error messages while preserving functionality
-  (defun olivetti--suppress-errors (orig-fn &rest args)
-    "Suppress olivetti error messages."
-    (let ((inhibit-message t)
-          (message-log-max nil))
-      (condition-case nil
-          (apply orig-fn args)
-        (error nil))))
-  
-  ;; Apply error suppression to the functions that generate errors
-  (advice-add 'olivetti-set-window :around #'olivetti--suppress-errors)
-  (advice-add 'olivetti-normalize-width :around #'olivetti--suppress-errors)
-  
-  (auto-olivetti-mode))
-#+end_src
-** Icons
-Some nerd-icons related stuffs
-
-#+begin_src emacs-lisp
-(use-package! nerd-icons-ibuffer
-  :ensure t
-  :hook (ibuffer-mode . nerd-icons-ibuffer-mode))
-
-;; (use-package! magit-file-icons
-;;   :init
-;;   (magit-file-icons-mode 1))
-#+end_src
-
-** Slightly transparent Emacs
-Emacs version 29 added a new frame parameter for "true" transparency, which means that only the blackground is transparent while the text is not.
-
-#+begin_src emacs-lisp :tangle no
-(add-to-list 'default-frame-alist '(alpha-background . 96))
-#+end_src
-
-I set Emacs to be slightly transparent.
-With this setting, I can put Emacs at full screen while still being able to read from the windows behind it.
-This is very useful when screen real-estate is scarce (which is always the case!)
-** Modeline
-Some tweaks to =doom-modeline=:
-#+begin_src emacs-lisp
-(setq doom-modeline-height 35)
-#+end_src
-
-Show page number when viewing PDFs:
-
-#+begin_src emacs-lisp
-(doom-modeline-def-segment buffer-name
-  "Display the current buffer's name, without any other information."
-  (concat
-   doom-modeline-spc
-   (doom-modeline--buffer-name)))
-
-(doom-modeline-def-segment pdf-icon
-  "PDF icon from nerd-icons."
-  (concat
-   doom-modeline-spc
-   (doom-modeline-icon 'mdicon "nf-md-file_pdf_box" nil nil
-                       :face (if (doom-modeline--active)
-                                 'nerd-icons-red
-                               'mode-line-inactive))))
-
-(defun doom-modeline-update-pdf-pages ()
-  "Update PDF pages."
-  (setq doom-modeline--pdf-pages
-        (let ((current-page-str (number-to-string (eval `(pdf-view-current-page))))
-              (total-page-str (number-to-string (pdf-cache-number-of-pages))))
-          (concat
-           (propertize
-            (concat (make-string (- (length total-page-str) (length current-page-str)) ? )
-                    " P" current-page-str)
-            'face 'mode-line)
-           (propertize (concat "/" total-page-str) 'face 'doom-modeline-buffer-minor-mode)))))
-
-(doom-modeline-def-segment pdf-pages
-  "Display PDF pages."
-  (if (doom-modeline--active) doom-modeline--pdf-pages
-    (propertize doom-modeline--pdf-pages 'face 'mode-line-inactive)))
-
-(doom-modeline-def-modeline 'pdf
-  '(bar window-number pdf-pages pdf-icon buffer-name)
-  '(misc-info matches major-mode process vcs))
-#+end_src
-
-Recent version of [[https://github.com/seagle0128/doom-modeline/pull/622][doom-modeline]] features [[github:rainstormstudio/nerd-icons.el][nerd-icons.el]] instead of [[github:domtronn/all-the-icons.el][all-the-icons.el]].
-I like this change, however different parts of Doom are still using =all-the-icons= under the hood.
-Some custom configurations is needed for now.
-
-#+begin_src emacs-lisp
-(use-package! nerd-icons
-  :custom
-  (nerd-icons-font-family "FiraMono Nerd Font Mono")
-  (nerd-icons-scale-factor 1.2)
-  (nerd-icons-default-adjust 0)
-  (doom-modeline-major-mode-icon t))
-#+end_src
-
-** Narrowing and center buffer contents
-On larger screens I like buffer contents to not exceed a certain width and are centered.
-=olivetti-mode= solves this problem nicely.
-There is also an =auto-olivetti-mode=  which automatically turns on =olivetti-mode= in most buffers.
-
-#+begin_src emacs-lisp
-(use-package! olivetti
-  :config
-  (setq-default olivetti-body-width 130)
-  (add-hook 'mixed-pitch-mode-hook  
-            (lambda () 
-              (when (and (bound-and-true-p olivetti-mode)
-                         (or (not (numberp olivetti-body-width))
-                             (eq olivetti-body-width 'unspecified)))
-                (setq-local olivetti-body-width 90)))))
-
-(use-package! auto-olivetti
-  :custom
-  (auto-olivetti-enabled-modes '(text-mode prog-mode helpful-mode ibuffer-mode image-mode))
-  :config
-  ;; Fix for olivetti-body-width being set to 'unspecified
-  (defadvice! +olivetti-fix-unspecified-width-a (&rest _)
-    "Fix olivetti-body-width when it gets set to 'unspecified."
-    :before #'olivetti-set-window
-    (when (or (not (numberp olivetti-body-width))
-              (eq olivetti-body-width 'unspecified))
-      (setq-local olivetti-body-width 130)))
-  
-  ;; Remove the error handling approach and try a different strategy
-  ;; This wrapper suppresses the error messages while preserving functionality
-  (defun olivetti--suppress-errors (orig-fn &rest args)
-    "Suppress olivetti error messages."
-    (let ((inhibit-message t)
-          (message-log-max nil))
-      (condition-case nil
-          (apply orig-fn args)
-        (error nil))))
-  
-  ;; Apply error suppression to the functions that generate errors
-  (advice-add 'olivetti-set-window :around #'olivetti--suppress-errors)
-  (advice-add 'olivetti-normalize-width :around #'olivetti--suppress-errors)
-  
-  (auto-olivetti-mode))
-#+end_src
-** Icons
-Some nerd-icons related stuffs
-
-#+begin_src emacs-lisp
-(use-package! nerd-icons-ibuffer
-  :ensure t
-  :hook (ibuffer-mode . nerd-icons-ibuffer-mode))
-
-;; (use-package! magit-file-icons
-;;   :init
-;;   (magit-file-icons-mode 1))
-#+end_src
-
-** Slightly transparent Emacs
-Emacs version 29 added a new frame parameter for "true" transparency, which means that only the blackground is transparent while the text is not.
-
-#+begin_src emacs-lisp :tangle no
-(add-to-list 'default-frame-alist '(alpha-background . 96))
-#+end_src
-
-I set Emacs to be slightly transparent.
-With this setting, I can put Emacs at full screen while still being able to read from the windows behind it.
-This is very useful when screen real-estate is scarce (which is always the case!)
-** Modeline
-Some tweaks to =doom-modeline=:
-#+begin_src emacs-lisp
-(setq doom-modeline-height 35)
-#+end_src
-
-Show page number when viewing PDFs:
-
-#+begin_src emacs-lisp
-(doom-modeline-def-segment buffer-name
-  "Display the current buffer's name, without any other information."
-  (concat
-   doom-modeline-spc
-   (doom-modeline--buffer-name)))
-
-(doom-modeline-def-segment pdf-icon
-  "PDF icon from nerd-icons."
-  (concat
-   doom-modeline-spc
-   (doom-modeline-icon 'mdicon "nf-md-file_pdf_box" nil nil
-                       :face (if (doom-modeline--active)
-                                 'nerd-icons-red
-                               'mode-line-inactive))))
-
-(defun doom-modeline-update-pdf-pages ()
-  "Update PDF pages."
-  (setq doom-modeline--pdf-pages
-        (let ((current-page-str (number-to-string (eval `(pdf-view-current-page))))
-              (total-page-str (number-to-string (pdf-cache-number-of-pages))))
-          (concat
-           (propertize
-            (concat (make-string (- (length total-page-str) (length current-page-str)) ? )
-                    " P" current-page-str)
-            'face 'mode-line)
-           (propertize (concat "/" total-page-str) 'face 'doom-modeline-buffer-minor-mode)))))
-
-(doom-modeline-def-segment pdf-pages
-  "Display PDF pages."
-  (if (doom-modeline--active) doom-modeline--pdf-pages
-    (propertize doom-modeline--pdf-pages 'face 'mode-line-inactive)))
-
-(doom-modeline-def-modeline 'pdf
-  '(bar window-number pdf-pages pdf-icon buffer-name)
-  '(misc-info matches major-mode process vcs))
-#+end_src
-
-Recent version of [[https://github.com/seagle0128/doom-modeline/pull/622][doom-modeline]] features [[github:rainstormstudio/nerd-icons.el][nerd-icons.el]] instead of [[github:domtronn/all-the-icons.el][all-the-icons.el]].
-I like this change, however different parts of Doom are still using =all-the-icons= under the hood.
-Some custom configurations is needed for now.
-
-#+begin_src emacs-lisp
-(use-package! nerd-icons
-  :custom
-  (nerd-icons-font-family "FiraMono Nerd Font Mono")
-  (nerd-icons-scale-factor 1.2)
-  (nerd-icons-default-adjust 0)
-  (doom-modeline-major-mode-icon t))
-#+end_src
-
-** Narrowing and center buffer contents
-On larger screens I like buffer contents to not exceed a certain width and are centered.
-=olivetti-mode= solves this problem nicely.
-There is also an =auto-olivetti-mode=  which automatically turns on =olivetti-mode= in most buffers.
-
-#+begin_src emacs-lisp
-(use-package! olivetti
-  :config
-  (setq-default olivetti-body-width 130)
-  (add-hook 'mixed-pitch-mode-hook  
-            (lambda () 
-              (when (and (bound-and-true-p olivetti-mode)
-                         (or (not (numberp olivetti-body-width))
-                             (eq olivetti-body-width 'unspecified)))
-                (setq-local olivetti-body-width 90)))))
-
-(use-package! auto-olivetti
-  :custom
-  (auto-olivetti-enabled-modes '(text-mode prog-mode helpful-mode ibuffer-mode image-mode))
-  :config
-  ;; Fix for olivetti-body-width being set to 'unspecified
-  (defadvice! +olivetti-fix-unspecified-width-a (&rest _)
-    "Fix olivetti-body-width when it gets set to 'unspecified."
-    :before #'olivetti-set-window
-    (when (or (not (numberp olivetti-body-width))
-              (eq olivetti-body-width 'unspecified))
-      (setq-local olivetti-body-width 130)))
-  
-  ;; Remove the error handling approach and try a different strategy
-  ;; This wrapper suppresses the error messages while preserving functionality
-  (defun olivetti--suppress-errors (orig-fn &rest args)
-    "Suppress olivetti error messages."
-    (let ((inhibit-message t)
-          (message-log-max nil))
-      (condition-case nil
-          (apply orig-fn args)
-        (error nil))))
-  
-  ;; Apply error suppression to the functions that generate errors
-  (advice-add 'olivetti-set-window :around #'olivetti--suppress-errors)
-  (advice-add 'olivetti-normalize-width :around #'olivetti--suppress-errors)
-  
-  (auto-olivetti-mode))
-#+end_src
-** Icons
-Some nerd-icons related stuffs
-
-#+begin_src emacs-lisp
-(use-package! nerd-icons-ibuffer
-  :ensure t
-  :hook (ibuffer-mode . nerd-icons-ibuffer-mode))
-
-;; (use-package! magit-file-icons
-;;   :init
-;;   (magit-file-icons-mode 1))
-#+end_src
-
-** Slightly transparent Emacs
-Emacs version 29 added a new frame parameter for "true" transparency, which means that only the blackground is transparent while the text is not.
-
-#+begin_src emacs-lisp :tangle no
-(add-to-list 'default-frame-alist '(alpha-background . 96))
-#+end_src
-
-I set Emacs to be slightly transparent.
-With this setting, I can put Emacs at full screen while still being able to read from the windows behind it.
-This is very useful when screen real-estate is scarce (which is always the case!)
-* Modeline
-** Some tweaks to =doom-modeline=:
-#+begin_src emacs-lisp
-(setq doom-modeline-height 35)
-#+end_src
-
-Show page number when viewing PDFs:
-
-#+begin_src emacs-lisp
-(doom-modeline-def-segment buffer-name
-  "Display the current buffer's name, without any other information."
-  (concat
-   doom-modeline-spc
-   (doom-modeline--buffer-name)))
-
-(doom-modeline-def-segment pdf-icon
-  "PDF icon from nerd-icons."
-  (concat
-   doom-modeline-spc
-   (doom-modeline-icon 'mdicon "nf-md-file_pdf_box" nil nil
-                       :face (if (doom-modeline--active)
-                                 'nerd-icons-red
-                               'mode-line-inactive))))
-
-(defun doom-modeline-update-pdf-pages ()
-  "Update PDF pages."
-  (setq doom-modeline--pdf-pages
-        (let ((current-page-str (number-to-string (eval `(pdf-view-current-page))))
-              (total-page-str (number-to-string (pdf-cache-number-of-pages))))
-          (concat
-           (propertize
-            (concat (make-string (- (length total-page-str) (length current-page-str)) ? )
-                    " P" current-page-str)
-            'face 'mode-line)
-           (propertize (concat "/" total-page-str) 'face 'doom-modeline-buffer-minor-mode)))))
-
-(doom-modeline-def-segment pdf-pages
-  "Display PDF pages."
-  (if (doom-modeline--active) doom-modeline--pdf-pages
-    (propertize doom-modeline--pdf-pages 'face 'mode-line-inactive)))
-
-(doom-modeline-def-modeline 'pdf
-  '(bar window-number pdf-pages pdf-icon buffer-name)
-  '(misc-info matches major-mode process vcs))
-#+end_src
-
-Recent version of [[https://github.com/seagle0128/doom-modeline/pull/622][doom-modeline]] features [[github:rainstormstudio/nerd-icons.el][nerd-icons.el]] instead of [[github:domtronn/all-the-icons.el][all-the-icons.el]].
-I like this change, however different parts of Doom are still using =all-the-icons= under the hood.
-Some custom configurations is needed for now.
-
-#+begin_src emacs-lisp
-(use-package! nerd-icons
-  :custom
-  (nerd-icons-font-family "FiraMono Nerd Font Mono")
-  (nerd-icons-scale-factor 1.2)
-  (nerd-icons-default-adjust 0)
-  (doom-modeline-major-mode-icon t))
-#+end_src
-
-** Narrowing and center buffer contents
-On larger screens I like buffer contents to not exceed a certain width and are centered.
-=olivetti-mode= solves this problem nicely.
-There is also an =auto-olivetti-mode=  which automatically turns on =olivetti-mode= in most buffers.
-
-#+begin_src emacs-lisp
-(use-package! olivetti
-  :config
-  (setq-default olivetti-body-width 130)
-  (add-hook 'mixed-pitch-mode-hook  
-            (lambda () 
-              (when (and (bound-and-true-p olivetti-mode)
-                         (or (not (numberp olivetti-body-width))
-                             (eq olivetti-body-width 'unspecified)))
-                (setq-local olivetti-body-width 90)))))
-
-(use-package! auto-olivetti
-  :custom
-  (auto-olivetti-enabled-modes '(text-mode prog-mode helpful-mode ibuffer-mode image-mode))
-  :config
-  ;; Fix for olivetti-body-width being set to 'unspecified
-  (defadvice! +olivetti-fix-unspecified-width-a (&rest _)
-    "Fix olivetti-body-width when it gets set to 'unspecified."
-    :before #'olivetti-set-window
-    (when (or (not (numberp olivetti-body-width))
-              (eq olivetti-body-width 'unspecified))
-      (setq-local olivetti-body-width 130)))
-  
-  ;; Remove the error handling approach and try a different strategy
-  ;; This wrapper suppresses the error messages while preserving functionality
-  (defun olivetti--suppress-errors (orig-fn &rest args)
-    "Suppress olivetti error messages."
-    (let ((inhibit-message t)
-          (message-log-max nil))
-      (condition-case nil
-          (apply orig-fn args)
-        (error nil))))
-  
-  ;; Apply error suppression to the functions that generate errors
-  (advice-add 'olivetti-set-window :around #'olivetti--suppress-errors)
-  (advice-add 'olivetti-normalize-width :around #'olivetti--suppress-errors)
-  
-  (auto-olivetti-mode))
-#+end_src
-** Icons
-Some nerd-icons related stuffs
-
-#+begin_src emacs-lisp
-(use-package! nerd-icons-ibuffer
-  :ensure t
-  :hook (ibuffer-mode . nerd-icons-ibuffer-mode))
-
-;; (use-package! magit-file-icons
-;;   :init
-;;   (magit-file-icons-mode 1))
-#+end_src
-
-** Slightly transparent Emacs
-Emacs version 29 added a new frame parameter for "true" transparency, which means that only the blackground is transparent while the text is not.
-
-#+begin_src emacs-lisp :tangle no
-(add-to-list 'default-frame-alist '(alpha-background . 96))
-#+end_src
-
-I set Emacs to be slightly transparent.
-With this setting, I can put Emacs at full screen while still being able to read from the windows behind it.
-This is very useful when screen real-estate is scarce (which is always the case!)
-** Modeline
-Some tweaks to =doom-modeline=:
-#+begin_src emacs-lisp
-(setq doom-modeline-height 35)
-#+end_src
-
-Show page number when viewing PDFs:
-
-#+begin_src emacs-lisp
-(doom-modeline-def-segment buffer-name
-  "Display the current buffer's name, without any other information."
-  (concat
-   doom-modeline-spc
-   (doom-modeline--buffer-name)))
-
-(doom-modeline-def-segment pdf-icon
-  "PDF icon from nerd-icons."
-  (concat
-   doom-modeline-spc
-   (doom-modeline-icon 'mdicon "nf-md-file_pdf_box" nil nil
-                       :face (if (doom-modeline--active)
-                                 'nerd-icons-red
-                               'mode-line-inactive))))
-
-(defun doom-modeline-update-pdf-pages ()
-  "Update PDF pages."
-  (setq doom-modeline--pdf-pages
-        (let ((current-page-str (number-to-string (eval `(pdf-view-current-page))))
-              (total-page-str (number-to-string (pdf-cache-number-of-pages))))
-          (concat
-           (propertize
-            (concat (make-string (- (length total-page-str) (length current-page-str)) ? )
-                    " P" current-page-str)
-            'face 'mode-line)
-           (propertize (concat "/" total-page-str) 'face 'doom-modeline-buffer-minor-mode)))))
-
-(doom-modeline-def-segment pdf-pages
-  "Display PDF pages."
-  (if (doom-modeline--active) doom-modeline--pdf-pages
-    (propertize doom-modeline--pdf-pages 'face 'mode-line-inactive)))
-
-(doom-modeline-def-modeline 'pdf
-  '(bar window-number pdf-pages pdf-icon buffer-name)
-  '(misc-info matches major-mode process vcs))
-#+end_src
-
-Recent version of [[https://github.com/seagle0128/doom-modeline/pull/622][doom-modeline]] features [[github:rainstormstudio/nerd-icons.el][nerd-icons.el]] instead of [[github:domtronn/all-the-icons.el][all-the-icons.el]].
-I like this change, however different parts of Doom are still using =all-the-icons= under the hood.
-Some custom configurations is needed for now.
-
-#+begin_src emacs-lisp
-(use-package! nerd-icons
-  :custom
-  (nerd-icons-font-family "FiraMono Nerd Font Mono")
-  (nerd-icons-scale-factor 1.2)
-  (nerd-icons-default-adjust 0)
-  (doom-modeline-major-mode-icon t))
-#+end_src
-
-** Narrowing and center buffer contents
-On larger screens I like buffer contents to not exceed a certain width and are centered.
-=olivetti-mode= solves this problem nicely.
-There is also an =auto-olivetti-mode=  which automatically turns on =olivetti-mode= in most buffers.
-
-#+begin_src emacs-lisp
-(use-package! olivetti
-  :config
-  (setq-default olivetti-body-width 130)
-  (add-hook 'mixed-pitch-mode-hook  
-            (lambda () 
-              (when (and (bound-and-true-p olivetti-mode)
-                         (or (not (numberp olivetti-body-width))
-                             (eq olivetti-body-width 'unspecified)))
-                (setq-local olivetti-body-width 90)))))
-
-(use-package! auto-olivetti
-  :custom
-  (auto-olivetti-enabled-modes '(text-mode prog-mode helpful-mode ibuffer-mode image-mode))
-  :config
-  ;; Fix for olivetti-body-width being set to 'unspecified
-  (defadvice! +olivetti-fix-unspecified-width-a (&rest _)
-    "Fix olivetti-body-width when it gets set to 'unspecified."
-    :before #'olivetti-set-window
-    (when (or (not (numberp olivetti-body-width))
-              (eq olivetti-body-width 'unspecified))
-      (setq-local olivetti-body-width 130)))
-  
-  ;; Remove the error handling approach and try a different strategy
-  ;; This wrapper suppresses the error messages while preserving functi onality
-  (defun olivetti--suppress-errors (orig-fn &rest args)
-    "Suppress olivetti error messages."
-    (let ((inhibit-message t)
-          (message-log-max nil))
-      (condition-case nil
-          (apply orig-fn args)
-        (error nil))))
-  
-  ;; Apply error suppression to the functions that generate errors
-  (advice-add 'olivetti-set-window :around #'olivetti--suppress-errors)
-  (advice-add 'olivetti-normalize-width :around #'olivetti--suppress-errors)
-  
-  (auto-olivetti-mode))
-#+end_src
-** Icons
-Some nerd-icons related stuffs
-
-#+begin_src emacs-lisp
-(use-package! nerd-icons-ibuffer
-  :ensure t
-  :hook (ibuffer-mode . nerd-icons-ibuffer-mode))
-
-;; (use-package! magit-file-icons
-;;   :init
-;;   (magit-file-icons-mode 1))
-#+end_src
-
-** Slightly transparent Emacs
-Emacs version 29 added a new frame parameter for "true" transparency, which means that only the blackground is transparent while the text is not.
-
-#+begin_src emacs-lisp :tangle no
-(add-to-list 'default-frame-alist '(alpha-background . 96))
-#+end_src
-
-I set Emacs to be slightly transparent.
-With this setting, I can put Emacs at full screen while still being able to read from the windows behind it.
-This is very useful when screen real-estate is scarce (which is always the case!)
-** Modeline
-Some tweaks to =doom-modeline=:
-#+begin_src emacs-lisp
-(setq doom-modeline-height 35)
-#+end_src
-
-Show page number when viewing PDFs:
-
-#+begin_src emacs-lisp
-(doom-modeline-def-segment buffer-name
-  "Display the current buffer's name, without any other information."
-  (concat
-   doom-modeline-spc
-   (doom-modeline--buffer-name)))
-
-(doom-modeline-def-segment pdf-icon
-  "PDF icon from nerd-icons."
-  (concat
-   doom-modeline-spc
-   (doom-modeline-icon 'mdicon "nf-md-file_pdf_box" nil nil
-                       :face (if (doom-modeline--active)
-                                 'nerd-icons-red
-                               'mode-line-inactive))))
-
-(defun doom-modeline-update-pdf-pages ()
-  "Update PDF pages."
-  (setq doom-modeline--pdf-pages
-        (let ((current-page-str (number-to-string (eval `(pdf-view-current-page))))
-              (total-page-str (number-to-string (pdf-cache-number-of-pages))))
-          (concat
-           (propertize
-            (concat (make-string (- (length total-page-str) (length current-page-str)) ? )
-                    " P" current-page-str)
-            'face 'mode-line)
-           (propertize (concat "/" total-page-str) 'face 'doom-modeline-buffer-minor-mode)))))
-
-(doom-modeline-def-segment pdf-pages
-  "Display PDF pages."
-  (if (doom-modeline--active) doom-modeline--pdf-pages
-    (propertize doom-modeline--pdf-pages 'face 'mode-line-inactive)))
-
-(doom-modeline-def-modeline 'pdf
-  '(bar window-number pdf-pages pdf-icon buffer-name)
-  '(misc-info matches major-mode process vcs))
-#+end_src
-
-Recent version of [[https://github.com/seagle0128/doom-modeline/pull/622][doom-modeline]] features [[github:rainstormstudio/nerd-icons.el][nerd-icons.el]] instead of [[github:domtronn/all-the-icons.el][all-the-icons.el]].
-I like this change, however different parts of Doom are still using =all-the-icons= under the hood.
-Some custom configurations is needed for now.
-
-#+begin_src emacs-lisp
-(use-package! nerd-icons
-  :custom
-  (nerd-icons-font-family "FiraMono Nerd Font Mono")
-  (nerd-icons-scale-factor 1.2)
-  (nerd-icons-default-adjust 0)
-  (doom-modeline-major-mode-icon t))
-#+end_src
-
-** Narrowing and center buffer contents
-On larger screens I like buffer contents to not exceed a certain width and are centered.
-=olivetti-mode= solves this problem nicely.
-There is also an =auto-olivetti-mode=  which automatically turns on =olivetti-mode= in most buffers.
-
-#+begin_src emacs-lisp
-(use-package! olivetti
-  :config
-  (setq-default olivetti-body-width 130)
-  (add-hook 'mixed-pitch-mode-hook  
-            (lambda () 
-              (when (and (bound-and-true-p olivetti-mode)
-                         (or (not (numberp olivetti-body-width))
-                             (eq olivetti-body-width 'unspecified)))
-                (setq-local olivetti-body-width 90)))))
-
-(use-package! auto-olivetti
-  :custom
-  (auto-olivetti-enabled-modes '(text-mode prog-mode helpful-mode ibuffer-mode image-mode))
-  :config
-  ;; Fix for olivetti-body-width being set to 'unspecified
-  (defadvice! +olivetti-fix-unspecified-width-a (&rest _)
-    "Fix olivetti-body-width when it gets set to 'unspecified."
-    :before #'olivetti-set-window
-    (when (or (not (numberp olivetti-body-width))
-              (eq olivetti-body-width 'unspecified))
-      (setq-local olivetti-body-width 130)))
-  
-  ;; Remove the error handling approach and try a different strategy
-  ;; This wrapper suppresses the error messages while preserving functionality
-  (defun olivetti--suppress-errors (orig-fn &rest args)
-    "Suppress olivetti error messages."
-    (let ((inhibit-message t)
-          (message-log-max nil))
-      (condition-case nil
-          (apply orig-fn args)
-        (error nil))))
-  
-  ;; Apply error suppression to the functions that generate errors
-  (advice-add 'olivetti-set-window :around #'olivetti--suppress-errors)
-  (advice-add 'olivetti-normalize-width :around #'olivetti--suppress-errors)
-  
-  (auto-olivetti-mode))
-#+end_src
-** Icons
-Some nerd-icons related stuffs
-
-#+begin_src emacs-lisp
-(use-package! nerd-icons-ibuffer
-  :ensure t
-  :hook (ibuffer-mode . nerd-icons-ibuffer-mode))
-
-;; (use-package! magit-file-icons
-;;   :init
-;;   (magit-file-icons-mode 1))
-#+end_src
-
-** Slightly transparent Emacs
-Emacs version 29 added a new frame parameter for "true" transparency, which means that only the blackground is transparent while the text is not.
-
-#+begin_src emacs-lisp :tangle no
-(add-to-list 'default-frame-alist '(alpha-background . 96))
-#+end_src
-
-I set Emacs to be slightly transparent.
-With this setting, I can put Emacs at full screen while still being able to read from the windows behind it.
-This is very useful when screen real-estate is scarce (which is always the case!)
-** Modeline
-Some tweaks to =doom-modeline=:
-#+begin_src emacs-lisp
-(setq doom-modeline-height 35)
-#+end_src
-
-Show page number when viewing PDFs:
-
-#+begin_src emacs-lisp
-(doom-modeline-def-segment buffer-name
-  "Display the current buffer's name, without any other information."
-  (concat
-   doom-modeline-spc
-   (doom-modeline--buffer-name)))
-
-(doom-modeline-def-segment pdf-icon
-  "PDF icon from nerd-icons."
-  (concat
-   doom-modeline-spc
-   (doom-modeline-icon 'mdicon "nf-md-file_pdf_box" nil nil
-                       :face (if (doom-modeline--active)
-                                 'nerd-icons-red
-                               'mode-line-inactive))))
-
-(defun hp/org-roam-calculate-similarity (node-id-1 node-id-2)
-  "Calculate similarity between two nodes based on shared links and tags."
-  (let* ((node1 (org-roam-node-from-id node-id-1))
-         (node2 (org-roam-node-from-id node-id-2))
-         (tags1 (org-roam-node-tags node1))
-         (tags2 (org-roam-node-tags node2))
-         (shared-tags (seq-intersection tags1 tags2))
-         (tag-similarity (if (or (null tags1) (null tags2))
-                            0.0
-                          (/ (float (length shared-tags))
-                             (length (seq-uniq (append tags1 tags2))))))
-         ;; Get backlinks for both nodes
-         (backlinks1 (org-roam-db-query
-                     [:select [source]
-                      :from links
-                      :where (= dest $s1)]
-                     node-id-1))
-         (backlinks2 (org-roam-db-query
-                     [:select [source]
-                      :from links
-                      :where (= dest $s1)]
-                     node-id-2))
-         (shared-backlinks (seq-intersection (mapcar #'car backlinks1)
-                                           (mapcar #'car backlinks2)))
-         (backlink-similarity (if (and backlinks1 backlinks2)
-                                 (/ (float (length shared-backlinks))
-                                    (length (seq-uniq (append (mapcar #'car backlinks1)
-                                                            (mapcar #'car backlinks2)))))
-                               0.0))
-         ;; Get forward links
-         (links1 (org-roam-db-query
-                 [:select [dest]
-                  :from links
-                  :where (= source $s1)]
-                 node-id-1))
-         (links2 (org-roam-db-query
-                 [:select [dest]
-                  :from links
-                  :where (= source $s1)]
-                 node-id-2))
-         (shared-links (seq-intersection (mapcar #'car links1)
-                                       (mapcar #'car links2)))
-         (link-similarity (if (and links1 links2)
-                             (/ (float (length shared-links))
-                                (length (seq-uniq (append (mapcar #'car links1)
-                                                        (mapcar #'car links2)))))
-                           0.0)))
-    ;; Weighted average of similarities
-    (+ (* 0.4 tag-similarity)
-       (* 0.3 backlink-similarity)
-       (* 0.3 link-similarity))))
-
-(defun hp/org-roam-find-similar-nodes ()
-  "Find nodes similar to the current node based on content and connections."
+(defun hp/load-evil-keybindings ()
   (interactive)
-  (let* ((current-node (org-roam-node-at-point))
-         (threshold 0.3))
-    (if current-node
-        (let* ((current-id (org-roam-node-id current-node))
-               (all-nodes (org-roam-node-list))
-               (similar-nodes '()))
-          (dolist (node all-nodes)
-            (unless (string= (org-roam-node-id node) current-id)
-              (let ((similarity (hp/org-roam-calculate-similarity current-id (org-roam-node-id node))))
-                (when (> similarity threshold)
-                  (push (cons similarity node) similar-nodes)))))
-          (setq similar-nodes (sort similar-nodes (lambda (a b) (> (car a) (car b)))))
-          (if similar-nodes
-              (let ((buffer (get-buffer-create "*Similar Nodes*")))
-                (with-current-buffer buffer
-                  (erase-buffer)
-                  (insert (format "# Nodes similar to: %s\n\n" (org-roam-node-title current-node)))
-                  (dolist (item (seq-take similar-nodes 20))
-                    (let ((sim (car item))
-                          (node (cdr item)))
-                      (insert (format "- [[id:%s][%s]] (%.2f)\n"
-                                     (org-roam-node-id node)
-                                     (org-roam-node-title node)
-                                     sim))))
-                  (org-mode)
-                  (goto-char (point-min)))
-                (pop-to-buffer buffer))
-            (message "No similar nodes found above threshold %.2f" threshold)))
-      (message "No node at point"))))
+  (load-file "~/.config/emacs/modules/config/default/+evil-bindings.el"))
 
-(defun hp/org-roam-cluster-analysis ()
-  "Perform cluster analysis on all org-roam nodes."
-  (interactive)
-  (let* ((all-nodes (org-roam-node-list))
-         (clusters (make-hash-table :test 'equal))
-         (processed-pairs (make-hash-table :test 'equal)))
-    (message "Analyzing %d nodes for clustering..." (length all-nodes))
-    (dotimes (i (length all-nodes))
-      (let ((node1 (nth i all-nodes)))
-        (dotimes (j (length all-nodes))
-          (when (and (not (= i j))
-                     (not (gethash (format "%s-%s" 
-                                          (min i j) (max i j)) processed-pairs)))
-            (let* ((node2 (nth j all-nodes))
-                   (similarity (hp/org-roam-calculate-similarity 
-                               (org-roam-node-id node1) 
-                               (org-roam-node-id node2))))
-              (puthash (format "%s-%s" (min i j) (max i j)) t processed-pairs)
-              (when (> similarity 0.4)  ; Clustering threshold
-                (let ((cluster-key (format "cluster-%d" (min i j))))
-                  (unless (gethash cluster-key clusters)
-                    (puthash cluster-key '() clusters))
-                  (puthash cluster-key 
-                          (cons node1 (cons node2 (gethash cluster-key clusters)))
-                          clusters))))))))
-    (let ((buffer (get-buffer-create "*Node Clusters*")))
-      (with-current-buffer buffer
-        (erase-buffer)
-        (insert "# Node Clustering Analysis\n\n")
-        (maphash (lambda (cluster-key nodes)
-                   (let ((unique-nodes (delete-dups nodes)))
-                     (when (> (length unique-nodes) 1)
-                       (insert (format "## %s (%d nodes)\n\n" 
-                                      cluster-key (length unique-nodes)))
-                       (dolist (node unique-nodes)
-                         (insert (format "- [[id:%s][%s]]\n"
-                                        (org-roam-node-id node)
-                                        (org-roam-node-title node))))
-                       (insert "\n"))))
-                 clusters)
-        (org-mode)
-        (goto-char (point-min)))
-      (pop-to-buffer buffer))))
-
-;; Hash table to store tag frequency weights
-(defvar hp/org-roam-tag-weights (make-hash-table :test 'equal)
-  "Hash table storing tag frequencies for clustering.")
-
-(defun hp/org-roam-update-tag-weights ()
-  "Update tag frequency weights for better clustering."
-  (interactive)
-  (clrhash hp/org-roam-tag-weights)
-  (let ((all-nodes (org-roam-node-list)))
-    (dolist (node all-nodes)
-      (dolist (tag (org-roam-node-tags node))
-        (puthash tag (1+ (gethash tag hp/org-roam-tag-weights 0)) 
-                hp/org-roam-tag-weights)))
-    (message "Updated tag weights for %d unique tags" 
-             (hash-table-count hp/org-roam-tag-weights))))
-
-;; Initialize tag weights on startup
-(run-with-idle-timer 5 nil #'hp/org-roam-update-tag-weights)
+(add-hook 'doom-after-init-hook #'hp/load-evil-keybindings)
 #+end_src
 
-***** Time-Based Link Decay & Refresh System
+** Completions
+*** Enable corfu in the minibuffer
+Having completion in the minibuffer is useful for when you want to run small elisp command to temporary modify the state of Emacs.
+This has been getting more and more useful the longer I have been using Emacs.
 
 #+begin_src emacs-lisp
-;; Time-based link decay and refresh system for org-roam
-(defvar hp/org-roam-link-decay-threshold 90
-  "Number of days after which a link is considered stale.")
+(use-package! corfu
+  :config
+  (defun corfu-enable-in-minibuffer ()
+    "Enable Corfu in the minibuffer if `completion-at-point' is bound."
+    (when (where-is-internal #'completion-at-point (list (current-local-map)))
+      ;; (setq-local corfu-auto nil) ;; Enable/disable auto completion
+      (setq-local corfu-echo-delay nil ;; Disable automatic echo and popup
+                  corfu-popupinfo-delay nil)
+      (corfu-mode 1)))
+  (add-hook 'minibuffer-setup-hook #'corfu-enable-in-minibuffer))
+#+end_src
 
-(defvar hp/org-roam-link-refresh-threshold 30
-  "Number of days after which to suggest refreshing content.")
+*** Narrow down queries for non-ASCII characters
+Sometimes my queries return results in Vietnamese which include letters with diacritics (e.g. =ă= or =đ= or =ê=).
+In these cases, I want to be able to narrow the search down by typing their ASCII equivalents (e.g. =a= or =d= or =e=).
+The implementation is simple: set matching styles in =orderless.el= to include the function =char-fold-to-regexp=.
 
-(defvar hp/org-roam-decay-weights
-  '((30 . 1.0)    ; Fresh (within 30 days)
-    (60 . 0.8)    ; Recent (30-60 days)
-    (90 . 0.6)    ; Aging (60-90 days)
-    (180 . 0.4)   ; Stale (90-180 days)
-    (365 . 0.2)   ; Old (180-365 days)
-    (1000 . 0.1)) ; Ancient (>365 days)
-  "Weight multipliers based on link age in days.")
+#+begin_src emacs-lisp
+(use-package! orderless
+  :config
+  (add-to-list 'orderless-matching-styles 'char-fold-to-regexp))
+#+end_src
 
-(defun hp/org-roam-calculate-link-age (file-path)
-  "Calculate the age of a file in days."
-  (let* ((file-time (file-attribute-modification-time (file-attributes file-path)))
-         (current-time (current-time))
-         (time-diff (time-subtract current-time file-time)))
-    (/ (float-time time-diff) 86400))) ; Convert to days
+*** Smaller popup text
+Automatic documentation popup while autocompleting is nice, but let's reduce the font size a little bit so that it doesn't cover the screen too much and makes it easier to skim for information:
 
-(defun hp/org-roam-get-decay-weight (age-days)
-  "Get the decay weight for a given age in days."
-  (let ((weight 0.1)) ; Default weight for very old content
-    (dolist (threshold-weight hp/org-roam-decay-weights)
-      (when (<= age-days (car threshold-weight))
-        (setq weight (cdr threshold-weight))
-        (return)))
-    weight))
+#+begin_src emacs-lisp :tangle no
+(custom-set-faces! '((corfu-popupinfo) :height 0.9))
+#+end_src
 
-(defun hp/org-roam-find-stale-links ()
-  "Find all stale links in the org-roam database."
-  (interactive)
-  (let* ((all-nodes (org-roam-node-list))
-         (stale-nodes '())
-         (refresh-nodes '()))
-    (dolist (node all-nodes)
-      (let* ((file-path (org-roam-node-file node))
-             (age-days (hp/org-roam-calculate-link-age file-path)))
-        (cond
-         ((> age-days hp/org-roam-link-decay-threshold)
-          (push (cons age-days node) stale-nodes))
-         ((> age-days hp/org-roam-link-refresh-threshold)
-          (push (cons age-days node) refresh-nodes)))))
-    
-    (let ((buffer (get-buffer-create "*Stale Links Analysis*")))
-      (with-current-buffer buffer
-        (erase-buffer)
-        (insert "# Link Decay Analysis\n\n")
-        
-        (when stale-nodes
-          (insert (format "## Stale Nodes (>%d days old)\n\n" hp/org-roam-link-decay-threshold))
-          (dolist (stale-node (sort stale-nodes (lambda (a b) (> (car a) (car b)))))
-            (let ((age (car stale-node))
-                  (node (cdr stale-node)))
-              (insert (format "**%d days old** - [[id:%s][%s]]\n"
-                             (round age)
-                             (org-roam-node-id node)
-                             (org-roam-node-title node)))))
-          (insert "\n"))
-        
-        (when refresh-nodes
-          (insert (format "## Nodes Needing Refresh (>%d days old)\n\n" hp/org-roam-link-refresh-threshold))
-          (dolist (refresh-node (sort refresh-nodes (lambda (a b) (> (car a) (car b)))))
-            (let ((age (car refresh-node))
-                  (node (cdr refresh-node)))
-              (insert (format "**%d days old** - [[id:%s][%s]]\n"
-                             (round age)
-                             (org-roam-node-id node)
-                             (org-roam-node-title node)))))
-          (insert "\n"))
-        
-        (insert (format "\n## Summary\n- Stale nodes: %d\n- Nodes needing refresh: %d\n- Total analyzed: %d"
-                       (length stale-nodes) (length refresh-nodes) (length all-nodes)))
-        (org-mode)
-        (goto-char (point-min)))
-      (pop-to-buffer buffer))))
+*** Icons
+Kind-icon adds icons to =corfu= completions based on the =:company-kind= property.
+Let's add this properties to those that don't provide them.
 
-(defun hp/org-roam-refresh-node-timestamp ()
-  "Refresh the timestamp of the current node."
-  (interactive)
-  (when-let ((node (org-roam-node-at-point)))
+#+begin_src emacs-lisp
+(after! org-roam
+  ;; Define advise
+  (defun hp/org-roam-capf-add-kind-property (orig-fun &rest args)
+    "Advice around `org-roam-complete-link-at-point' to add :company-kind property."
+    (let ((result (apply orig-fun args)))
+      (append result '(:company-kind (lambda (_) 'org-roam)))))
+  ;; Wraps around the relevant functions
+  (advice-add 'org-roam-complete-link-at-point :around #'hp/org-roam-capf-add-kind-property)
+  (advice-add 'org-roam-complete-everywhere :around #'hp/org-roam-capf-add-kind-property))
+
+(after! citar
+  ;; Define advise
+  (defun hp/citar-capf-add-kind-property (orig-fun &rest args)
+    "Advice around `org-roam-complete-link-at-point' to add :company-kind property."
+    (let ((result (apply orig-fun args)))
+      (append result '(:company-kind (lambda (_) 'reference)))))
+  ;; Wraps around the relevant functions
+  (advice-add 'citar-capf :around #'hp/citar-capf-add-kind-property))
+#+end_src
+
+Now, we can implement custom icons for Org-roam completions:
+
+#+begin_src emacs-lisp
+(after! (org-roam nerd-icons-corfu)
+  (add-to-list
+   'nerd-icons-corfu-mapping
+   '(org-roam :style "cod" :icon "notebook" :face font-lock-type-face)))
+#+end_src
+
+** Language server protocol (LSP)
+#+begin_src emacs-lisp
+(use-package! lsp-ui
+  :config
+  (setq lsp-ui-doc-delay 2
+        lsp-ui-doc-max-width 80)
+  (setq lsp-signature-function 'lsp-signature-posframe))
+#+end_src
+
+** Yasnippet
+
+#+begin_src emacs-lisp
+(use-package! yasnippet
+  :config
+  ;; It will test whether it can expand, if yes, change cursor color
+  (defun hp/change-cursor-color-if-yasnippet-can-fire (&optional field)
+    (interactive)
+    (setq yas--condition-cache-timestamp (current-time))
+    (let (templates-and-pos)
+      (unless (and yas-expand-only-for-last-commands
+                   (not (member last-command yas-expand-only-for-last-commands)))
+        (setq templates-and-pos (if field
+                                    (save-restriction
+                                      (narrow-to-region (yas--field-start field)
+                                                        (yas--field-end field))
+                                      (yas--templates-for-key-at-point))
+                                  (yas--templates-for-key-at-point))))
+      (set-cursor-color (if (and templates-and-pos (first templates-and-pos)
+                                 (eq evil-state 'insert))
+                            (doom-color 'red)
+                          (face-attribute 'default :foreground)))))
+  :hook (post-command . hp/change-cursor-color-if-yasnippet-can-fire))
+#+end_src
+
+** Citations
+
+#+begin_src emacs-lisp
+(use-package! citar
+  :hook
+  (org-mode . citar-capf-setup)
+  :config
+  (setq
+   citar-bibliography (list (concat org-directory "/References/zotero.bib"))
+   citar-notes-paths (list(concat org-directory "/Org-roam/literature/"))
+   citar-library-paths (list (concat org-directory "/Org-roam/"))
+   citar-file-variable "file"
+   citar-symbol-separator "  "
+   ;; The global bibliography source may be set to something,
+   ;; but now let's set it on a per-file basis
+   ;; org-cite-global-bibliography citar-bibliography
+   )
+  ;; Search contents of PDFs
+  (after! (embark pdf-occur)
+    (defun citar/search-pdf-contents (keys-entries &optional str)
+      "Search pdfs."
+      (interactive (list (citar-select-refs)))
+      (let ((files (citar-file--files-for-multiple-entries
+                    (citar--ensure-entries keys-entries)
+                    citar-library-paths
+                    '("pdf")))
+            (search-str (or str (read-string "Search string: "))))
+        (pdf-occur-search files search-str t)))
+    ;; with this, you can exploit embark's multitarget actions, so that you can run `embark-act-all`
+    (add-to-list 'embark-multitarget-actions #'citar/search-pdf-contents)))
+#+end_src
+** Workspaces
+#+begin_src emacs-lisp
+(defadvice! hp/config-in-its-own-workspace (&rest _)
+  "Open Elfeeds in its own workspace."
+  :before #'doom/find-file-in-private-config
+  (when (modulep! :ui workspaces)
+    (+workspace-switch "Configs" t)))
+#+end_src
+
+* Major modes and language-specific configurations
+** Org-mode
+I came to Emacs for coding, but eventually what kept me using it is Org-mode.
+In fact, I spend most of my time in an Org-mode buffer.
+It's just that good.
+*** Basics
+
+#+begin_src emacs-lisp
+(use-package! org
+  :config
+  (setq org-highlight-links
+        '(bracket angle plain tag date footnote)
+        org-image-align 'center)
+  ;; Setup custom links
+  (+org-init-custom-links-h))
+#+end_src
+
+Need to check if ellipsis icon works properly before committing:
+
+#+begin_src emacs-lisp
+(after! (org nerd-icons)
+  (setq org-ellipsis ""))
+#+end_src
+
+*** Org-capture
+#+begin_src emacs-lisp
+(after! org-capture
+  (setq org-capture-templates
+        `(("t" "Todo" entry (file+headline ,(concat org-directory "tasks.org") "Tasks")
+           "* TODO %?\n  %i\n  %a")
+          ("n" "Note" entry (file+datetree ,(concat org-directory "notes.org"))
+           "* %?\nEntered on %U\n  %i\n  %a")
+          ("j" "Journal" entry (file+datetree ,(concat org-directory "journal.org"))
+           "* %?\nEntered on %U\n  %i\n  %a")
+          ("m" "Meeting" entry (file+headline ,(concat org-directory "meetings.org") "Meetings")
+           "* %? :meeting:\n  %U\n  %i\n  %a")
+          ("i" "Idea" entry (file+headline ,(concat org-directory "ideas.org") "Ideas")
+           "* %?\n  %U\n  %i\n  %a")
+          ("w" "Web Link" entry (file+headline ,(concat org-directory "links.org") "Links")
+           "* %?\n  %U\n  %c\n  %i"))))
+#+end_src
+
+*** Org-tempo
+#+begin_src emacs-lisp
+(use-package! org-tempo
+  :after org
+  :config
+  )
+#+end_src
+**** Org-Pandoc Import/Export
+#!begin_src emacs-lisp
+(use-package! org-pandoc-import :after org)
+#+end_src
+
+*** Visual-related configs
+Since I spend most of my time writing in Org-mode, might as well make it looks nice.
+**** Custom faces
+
+#+begin_src emacs-lisp
+(after! org
+  ;; Set some faces
+  (custom-set-faces!
+    `((org-quote)
+      :foreground ,(doom-color 'blue) :extend t)
+    `((org-block-begin-line org-block-end-line)
+      :background ,(doom-color 'bg)))
+  ;; Change how image previews are shown
+  (setq org-image-actual-width (min (/ (display-pixel-width) 3) 800)))
+#+end_src
+
+Emacs version 29 can now tell the difference between 'regular' or  'normal' font weights and 'medium' weights.
+Let's use the medium weights for org-mode headings.
+
+#+begin_src emacs-lisp :tangle no
+(after! org-mode
+  (custom-set-faces!
+    `((org-document-title)
+      :foreground ,(face-attribute 'org-document-title :foreground)
+      :height 1.4 :weight 'semi-bold)
+    `((org-level-1)
+      :foreground ,(face-attribute 'outline-1 :foreground)
+      :height 1.3 :weight 'semi-bold)
+    `((org-level-2)
+      :foreground ,(face-attribute 'outline-2 :foreground)
+      :height 1.2 :weight 'semi-bold)
+    `((org-level-3)
+      :foreground ,(face-attribute 'outline-3 :foreground)
+      :height 1.1 :weight 'semi-bold)
+    `((org-level-4)
+      :foreground ,(face-attribute 'outline-4 :foreground)
+      :weight 'semi-bold)
+    `((org-level-5)
+      :foreground ,(face-attribute 'outline-5 :foreground)
+      :weight 'semi-bold)))
+#+end_src
+
+**** Font-lock settings
+
+#+begin_src emacs-lisp
+(after! org
+  ;; Custom regex fontifications
+  (font-lock-add-keywords 'org-mode
+                          '(("^\\(?:[  ]*\\)\\(?:[-+]\\|[ ]+\\*\\|\\(?:[0-9]+\\|[A-Za-z]\\)[.)]\\)?[ ]+"
+                             . 'fixed-pitch)))
+  (font-lock-add-keywords 'org-mode '(("(\\?)" . 'error)))
+
+  ;; Highlight first letter of a paragraph
+  ;; (font-lock-add-keywords 'org-mode '(("^\\(?:\n\\)\\([[:digit:][:upper:][:lower:]]\\)" . 'org-warning)))
+  )
+#+end_src
+
+**** Prettify symbols
+Org-mode syntax supports having two consecutive dashes =--= as to be exported as the en-dash (=–=) and three consecutive dashes =---= to be exported as the em-dash (=—=).
+It's good to have these symbols automatically prettified in an Org-buffer too.
+
+[[file:pics/org-em-dash.png]]
+
+However, the problem is that =prettify-symbol-mode= doesn't replace the symbols right after a word or inside quotes, which are the two major use-case for the em-dash (=—=).
+To remedy this problem, we need to write a custom function and set it to =prettify-symbols-compose-predicate=.
+
+#+begin_src emacs-lisp
+(after! org
+  ;; Prettification should ignore preceding letters
+  (defun prettify-symbols-compose-in-text-mode-p (start end _match)
+    "Similar to `prettify-symbols-default-compose-p' but ignore letters or words."
+    ;; Check that the chars should really be composed into a symbol.
+    (let* ((syntaxes-beg (if (memq (char-syntax (char-after start)) '(?_))
+                             '(?_) '(?. ?\\)))
+           (syntaxes-end (if (memq (char-syntax (char-before end)) '(?_))
+                             '(?_) '(?. ?\\))))
+      (not (or (memq (char-syntax (or (char-before start) ?\s)) syntaxes-beg)
+               (memq (char-syntax (or (char-after end) ?\s)) syntaxes-end)
+               ;; (nth 8 (syntax-ppss))
+               (org-in-src-block-p)
+               ))))
+  ;; Replace two consecutive hyphens with the em-dash
+  (defun hp/org-mode-load-prettify-symbols ()
+    (interactive)
+    (pushnew! prettify-symbols-alist
+              '(":PROPERTIES:" . "")
+              '("--"  . "–") '("---" . "—")
+              '("(?)" . "") '("(?)." . ".") '("(?)," . ","))
+    (modify-syntax-entry ? " ")
+    (prettify-symbols-mode 1)
+    ;; Now, set the value of this
+    (setq-local prettify-symbols-compose-predicate 'prettify-symbols-compose-in-text-mode-p)
+    )
+  (when (not IS-WINDOWS)
+    (add-hook 'org-mode-hook 'hp/org-mode-load-prettify-symbols)))
+#+end_src
+**** Turn off highlighting current line
+Highlight mode is nice.
+However, in an Org-mode buffer, I feel like it might be too much.
+Let's turn off =hl-line-mode= in text buffers for now.
+
+#+begin_src emacs-lisp
+(add-hook 'text-mode-hook (lambda () (hl-line-mode -1)))
+#+end_src
+
+**** Org-modern and svg-tag-mode
+=org-modern= is really cool -- especially when combined with =svg-tag-mode=.
+The only downside is it doesn't play well with =org-indent-mode= (for now).
+
+#+begin_src emacs-lisp
+(use-package! org-modern
+  :hook (org-mode . org-modern-mode)
+  :config
+  (setq
+   ;; Edit settings
+   org-catch-invisible-edits 'show-and-error
+   org-special-ctrl-a/e t
+   org-insert-heading-respect-content t
+   ;; Appearance
+   org-modern-radio-target    '("❰" t "❱")
+   org-modern-internal-target '("↪ " t "")
+   org-modern-todo nil
+   org-modern-tag nil
+   org-modern-timestamp t
+   org-modern-progress nil
+   org-modern-priority nil
+   org-modern-horizontal-rule "──────────"
+   org-modern-hide-stars "·"
+   org-modern-star 'fold
+   org-modern-fold-stars '(("⁛" . "⁖"))
+   org-modern-keyword "‣"
+   org-modern-list '((43 . "•")
+                     (45 . "–")
+                     (42 . "↪")))
+  (custom-set-faces!
+    `((org-modern-tag)
+      :background ,(doom-blend (doom-color 'blue) (doom-color 'bg) 0.1)
+      :foreground ,(doom-color 'grey))
+    `((org-modern-radio-target org-modern-internal-target)
+      :inherit 'default :foreground ,(doom-color 'blue)))
+  )
+#+end_src
+
+The configurations for =svg-tag-mode= go here, too:
+
+#+begin_src emacs-lisp
+(use-package! svg-tag-mode
+  :config
+  (defconst date-re "[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}")
+  (defconst time-re "[0-9]\\{2\\}:[0-9]\\{2\\}")
+  (defconst day-re "[A-Za-z]\\{3\\}")
+  (defconst day-time-re (format "\\(%s\\)? ?\\(%s\\)?" day-re time-re))
+
+  (defun svg-progress-percent (value)
+    (svg-image (svg-lib-concat
+                (svg-lib-progress-bar
+                 (/ (string-to-number value) 100.0) nil
+                 :height 0.8 :foreground (doom-color 'fg) :background (doom-color 'bg)
+                 :margin 0 :stroke 2 :radius 3 :padding 2 :width 11)
+                (svg-lib-tag (concat value "%") nil
+                             :height 0.8 :foreground (doom-color 'fg) :background (doom-color 'bg)
+                             :stroke 0 :margin 0)) :ascent 'center))
+
+  (defun svg-progress-count (value)
+    (let* ((seq (mapcar #'string-to-number (split-string value "/")))
+           (count (float (car seq)))
+           (total (float (cadr seq))))
+      (svg-image (svg-lib-concat
+                  (svg-lib-progress-bar (/ count total) nil
+                                        :foreground (doom-color 'fg)
+                                        :background (doom-color 'bg) :height 0.8
+                                        :margin 0 :stroke 2 :radius 3 :padding 2 :width 11)
+                  (svg-lib-tag value nil
+                               :foreground (doom-color 'fg)
+                               :background (doom-color 'bg)
+                               :stroke 0 :margin 0 :height 0.8)) :ascent 'center)))
+
+  (set-face-attribute 'svg-tag-default-face nil :family "Alegreya Sans")
+  (setq svg-tag-tags
+        `(;; Progress e.g. [63%] or [10/15]
+          ("\\(\\[[0-9]\\{1,3\\}%\\]\\)" . ((lambda (tag)
+                                              (svg-progress-percent (substring tag 1 -2)))))
+          ("\\(\\[[0-9]+/[0-9]+\\]\\)" . ((lambda (tag)
+                                            (svg-progress-count (substring tag 1 -1)))))
+          ;; Task priority e.g. [#A], [#B], or [#C]
+          ("\\[#A\\]" . ((lambda (tag) (svg-tag-make tag :face 'error :inverse t :height .85
+                                                     :beg 2 :end -1 :margin 0 :radius 10))))
+          ("\\[#B\\]" . ((lambda (tag) (svg-tag-make tag :face 'warning :inverse t :height .85
+                                                     :beg 2 :end -1 :margin 0 :radius 10))))
+          ("\\[#C\\]" . ((lambda (tag) (svg-tag-make tag :face 'org-todo :inverse t :height .85
+                                                     :beg 2 :end -1 :margin 0 :radius 10))))
+          ;; Keywords
+          ("TODO" . ((lambda (tag) (svg-tag-make tag :inverse t :height .85 :face 'org-todo))))
+          ("HOLD" . ((lambda (tag) (svg-tag-make tag :height .85 :face 'org-todo))))
+          ("DONE\\|STOP" . ((lambda (tag) (svg-tag-make tag :inverse t :height .85 :face 'org-done))))
+          ("NEXT\\|WAIT" . ((lambda (tag) (svg-tag-make tag :inverse t :height .85 :face '+org-todo-active))))
+          ("REPEAT\\|EVENT\\|PROJ\\|IDEA" .
+           ((lambda (tag) (svg-tag-make tag :inverse t :height .85 :face '+org-todo-project))))
+          ("REVIEW" . ((lambda (tag) (svg-tag-make tag :inverse t :height .85 :face '+org-todo-onhold))))))
+
+  :hook (org-mode . svg-tag-mode)
+  )
+#+end_src
+
+**** Org-appear
+=org-appear= for seemless look:
+
+#+begin_src emacs-lisp
+(use-package! org-appear
+  :hook
+  (org-mode . org-appear-mode)
+  :config
+  (setq org-hide-emphasis-markers t
+        org-appear-autolinks 'just-brackets))
+#+end_src
+
+**** Org-CSL-activate
+Similarly, for CSL citations formatting in an Org buffer:
+
+#+begin_src emacs-lisp
+(use-package! oc-csl-activate
+  :config
+  (setq org-cite-activate-processor 'csl-activate)
+  (setq org-cite-csl-activate-use-document-style t)
+  (setq org-cite-csl-activate-use-document-locale t)
+  (add-hook 'org-mode-hook
+            (lambda ()
+              (cursor-sensor-mode 1)
+              (org-cite-csl-activate-render-all))))
+#+end_src
+**** General
+#+begin_src emacs-lisp
+(use-package! ox
+  :config
+  (setq org-export-with-tags nil)
+  ;; Auto export acronyms as small caps
+  ;; Copied from tecosaur
+
+  (defun org-export-filter-text-acronym (text backend _info)
+    "Wrap suspected acronyms in acronyms-specific formatting.
+Treat sequences of 2+ capital letters (optionally succeeded by \"s\") as an acronym.
+Ignore if preceeded by \";\" (for manual prevention) or \"\\\" (for LaTeX commands).
+
+TODO abstract backend implementations."
+    (let ((base-backend
+           (cond
+            ;; ((org-export-derived-backend-p backend 'latex) 'latex)
+            ((org-export-derived-backend-p backend 'html) 'html)))
+          (case-fold-search nil))
+      (when base-backend
+        (replace-regexp-in-string
+         "[;\\\\]?\\b[A-Z][A-Z]+s?\\(?:[^A-Za-z]\\|\\b\\)"
+         (lambda (all-caps-str)
+           (cond ((equal (aref all-caps-str 0) ?\\) all-caps-str)                ; don't format LaTeX commands
+                 ((equal (aref all-caps-str 0) ?\;) (substring all-caps-str 1))  ; just remove not-acronym indicator char ";"
+                 (t (let* ((final-char (if (string-match-p "[^A-Za-z]" (substring all-caps-str -1 (length all-caps-str)))
+                                           (substring all-caps-str -1 (length all-caps-str))
+                                         nil)) ; needed to re-insert the [^A-Za-z] at the end
+                           (trailing-s (equal (aref all-caps-str (- (length all-caps-str) (if final-char 2 1))) ?s))
+                           (acr (if final-char
+                                    (substring all-caps-str 0 (if trailing-s -2 -1))
+                                  (substring all-caps-str 0 (+ (if trailing-s -1 (length all-caps-str)))))))
+                      (pcase base-backend
+                        ('html (concat "<span class='smallcap'>" (s-downcase acr) "</span>" (when trailing-s "<small>s</small>") final-char)))))))
+         text t t))))
+
+  (add-to-list 'org-export-filter-plain-text-functions
+               #'org-export-filter-text-acronym)
+
+  ;; We won't use `org-export-filter-headline-functions' because it
+  ;; passes (and formats) the entire section contents. That's no good.
+
+  (defun org-html-format-headline-acronymised (todo todo-type priority text tags info)
+    "Like `org-html-format-headline-default-function', but with acronym formatting."
+    (org-html-format-headline-default-function
+     todo todo-type priority (org-export-filter-text-acronym text 'html info) tags info))
+  (setq org-html-format-headline-function #'org-html-format-headline-acronymised)
+  )
+#+end_src
+
+This allows ignoring headlines when exporting by adding the tag =:ignore:=  to an Org heading.
+
+#+begin_src emacs-lisp
+(use-package! ox-extra
+  :config
+  (ox-extras-activate '(ignore-headlines)))
+#+end_src
+**** Exporting behavior of special blocks
+***** General behaviors
+#+begin_src emacs-lisp
+(use-package! org-special-block-extras
+  :after org
+  :hook (org-mode . org-special-block-extras-mode)
+  :config
+  (setq org-special-block-add-html-extra nil))
+#+end_src
+
+***** Theorems, proof, definitions
+#+begin_src emacs-lisp
+(after! org-special-block-extras
+  ;; Theorem
+  (org-defblock theorem
+   (name "")
+   (format "{{< notice info \"Theorem: %s\" >}}\n%s\n{{< /notice >}}"
+           (if (eq name "") "" (format "[%s]" name)) contents))
+  ;; Proposition
+  (org-defblock proposition
+   (name "")
+   (format "{{< notice info \"Proposition: %s\" >}}\n%s\n{{< /notice >}}"
+           (if (eq name "") "" (format "[%s]" name)) contents))
+  ;; Lemma
+  (org-defblock lemma
+   (name "")
+   (format "{{< notice info \"Lemma: %s\" >}}\n%s\n{{< /notice >}}"
+           (if (eq name "") "" (format "[%s]" name)) contents))
+  ;;Definitions
+  (org-defblock definition
+   (name "")
+   (format "{{< notice info \"Definition: %s\" >}}\n%s\n{{< /notice >}}"
+           (if (eq name "") "" (format "[%s]" name)) contents))
+  )
+#+end_src
+***** Simpler =details= blocks
+
+#+begin_src emacs-lisp
+(after! org-special-block-extras
+  (org-defblock detail-summary
+   (title "")
+   (format (pcase backend
+             (_ "<details>\n<summary>%s</summary>%s </details>"))
+           title contents)))
+#+end_src
+***** Notices
+
+#+begin_src emacs-lisp
+(after! org-special-block-extras
+  (org-defblock warning
+   (frame-title "Warning")
+   (format "{{< notice warning \"%s\" >}}\n%s\n{{< /notice >}}"
+    frame-title contents))
+
+
+  (org-defblock info
+   (frame-title "Info")
+   (format "{{< notice info \"%s\" >}}\n%s\n{{< /notice >}}"
+    frame-title contents))
+
+
+  (org-defblock tips
+   (frame-title "Tips")
+   (format "{{< notice tip \"%s\" >}}\n%s\n{{< /notice >}}"
+    frame-title contents))
+  )
+#+end_src
+
+**** Block color overlays
+Since we're are overdoing it, let's make these blocks /slightly colorful/!
+
+#+begin_src emacs-lisp
+(after! org-special-block-extras
+  (defface hp/org-special-blocks-tips-face
+    `((t :background ,(doom-blend (doom-color 'teal) (doom-color 'bg) 0.1) :extend t))
+    "Face for tip blocks")
+  (defface hp/org-special-blocks-info-face
+    `((t :background ,(doom-blend (doom-color 'blue) (doom-color 'bg) 0.1) :extend t))
+    "Face for info blocks")
+  (defface hp/org-special-blocks-warning-face
+    `((t :background ,(doom-blend (doom-color 'orange) (doom-color 'bg) 0.1) :extend t))
+    "Face for warning blocks")
+  (defface hp/org-special-blocks-note-face
+    `((t :background ,(doom-blend (doom-color 'violet) (doom-color 'bg) 0.1) :extend t))
+    "Face for warning blocks")
+  (defface hp/org-special-blocks-question-face
+    `((t :background ,(doom-blend (doom-color 'green) (doom-color 'bg) 0.1) :extend t))
+    "Face for warning blocks")
+  (defface hp/org-special-blocks-error-face
+    `((t :background ,(doom-blend (doom-color 'red) (doom-color 'bg) 0.1) :extend t))
+    "Face for warning blocks")
+
+  (defun hp/org-add-overlay-tips-blocks ()
+    "Apply overlays to #+begin_tips blocks in the current buffer."
     (save-excursion
       (goto-char (point-min))
-      (if (re-search-forward "^#\\+created:" nil t)
-          (progn
-            (beginning-of-line)
-            (kill-line)
-            (insert (format "#+created: %s" (format-time-string "[%Y-%m-%d %a %H:%M]"))))
-        (progn
-          (goto-char (point-min))
-          (when (re-search-forward "^#\\+title:" nil t)
-            (end-of-line)
-            (insert (format "\n#+created: %s" (format-time-string "[%Y-%m-%d %a %H:%M]"))))))
-      ;; Also add a last-modified timestamp
+      (while (re-search-forward "^\\(\\#\\+begin_tips\\)" nil t)
+        (let* ((beg (match-beginning 0))
+               (end (if (re-search-forward "^\\(\\#\\+end_tips\\)" nil t)
+                        (1+ (line-end-position))
+                      (point-max)))
+               (ov (make-overlay beg end)))
+          (overlay-put ov 'face 'hp/org-special-blocks-tips-face)))))
+
+  (defun hp/org-add-overlay-info-blocks ()
+    "Apply overlays to #+begin_info blocks in the current buffer."
+    (save-excursion
       (goto-char (point-min))
-      (if (re-search-forward "^#\\+modified:" nil t)
-          (progn
-            (beginning-of-line)
-            (kill-line)
-            (insert (format "#+modified: %s" (format-time-string "[%Y-%m-%d %a %H:%M]"))))
-        (progn
-          (goto-char (point-min))
-          (when (re-search-forward "^#\\+created:" nil t)
-            (end-of-line)
-            (insert (format "\n#+modified: %s" (format-time-string "[%Y-%m-%d %a %H:%M]")))))))
-    (org-roam-db-sync)
-    (message "Refreshed timestamps for: %s" (org-roam-node-title node))))
+      (while (re-search-forward "^\\(\\#\\+begin_\\(?:info\\|theorem\\)\\)" nil t)
+        (let* ((beg (match-beginning 0))
+               (end (if (re-search-forward "^\\(\\#\\+end_\\(?:info\\|theorem\\)\\)" nil t)
+                        (1+ (line-end-position))
+                      (point-max)))
+               (ov (make-overlay beg end)))
+          (overlay-put ov 'face 'hp/org-special-blocks-info-face)))))
 
-(defun hp/org-roam-weighted-node-search ()
-  "Search nodes with time-based decay weighting."
-  (interactive)
-  (let* ((all-nodes (org-roam-node-list))
-         (weighted-nodes '()))
-    (dolist (node all-nodes)
-      (let* ((file-path (org-roam-node-file node))
-             (age-days (hp/org-roam-calculate-link-age file-path))
-             (weight (hp/org-roam-get-decay-weight age-days))
-             (weighted-title (format "[%.1f] %s" weight (org-roam-node-title node))))
-        (push (cons weighted-title node) weighted-nodes)))
-    
-    (let* ((sorted-nodes (sort weighted-nodes 
-                              (lambda (a b) 
-                                (let ((weight-a (string-to-number (substring (car a) 1 4)))
-                                      (weight-b (string-to-number (substring (car b) 1 4))))
-                                  (> weight-a weight-b)))))
-           (selected (completing-read "Select node (time-weighted): " 
-                                     (mapcar #'car sorted-nodes)))
-           (node (cdr (assoc selected sorted-nodes))))
-      (org-roam-node-visit node))))
+  (defun hp/org-add-overlay-warning-blocks ()
+    "Apply overlays to #+begin_warning blocks in the current buffer."
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward "^\\(\\#\\+begin_warning\\)" nil t)
+        (let* ((beg (match-beginning 0))
+               (end (if (re-search-forward "^\\(\\#\\+end_warning\\)" nil t)
+                        (1+ (line-end-position))
+                      (point-max)))
+               (ov (make-overlay beg end)))
+          (overlay-put ov 'face 'hp/org-special-blocks-warning-face)))))
 
-(defun hp/org-roam-schedule-refresh-reminders ()
-  "Schedule refresh reminders for aging content."
-  (interactive)
-  (let* ((all-nodes (org-roam-node-list))
-         (reminder-count 0))
-    (dolist (node all-nodes)
-      (let* ((file-path (org-roam-node-file node))
-             (age-days (hp/org-roam-calculate-link-age file-path)))
-        (when (and (> age-days hp/org-roam-link-refresh-threshold)
-                   (< age-days hp/org-roam-link-decay-threshold))
-          (setq reminder-count (1+ reminder-count))
-          ;; Could integrate with org-agenda or notification system here
-          )))
-    (message "Scheduled %d refresh reminders" reminder-count)))
+  (defun hp/org-add-overlay-note-blocks ()
+    "Apply overlays to #+begin_note blocks in the current buffer."
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward "^\\(\\#\\+begin_\\(?:note\\|definition\\)\\)" nil t)
+        (let* ((beg (match-beginning 0))
+               (end (if (re-search-forward "^\\(\\#\\+end_\\(?:note\\|definition\\)\\)" nil t)
+                        (1+ (line-end-position))
+                      (point-max)))
+               (ov (make-overlay beg end)))
+          (overlay-put ov 'face 'hp/org-special-blocks-note-face)))))
 
-(defface hp/org-roam-stale-link-face
-  '((t (:foreground "#888888" :slant italic)))
-  "Face for stale org-roam links.")
+  (defun hp/org-add-overlay-question-blocks ()
+    "Apply overlays to #+begin_question blocks in the current buffer."
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward "^\\(\\#\\+begin_\\(?:question\\|proposition\\)\\)" nil t)
+        (let* ((beg (match-beginning 0))
+               (end (if (re-search-forward "^\\(\\#\\+end_\\(?:question\\|proposition\\)\\)" nil t)
+                        (1+ (line-end-position))
+                      (point-max)))
+               (ov (make-overlay beg end)))
+          (overlay-put ov 'face 'hp/org-special-blocks-question-face)))))
 
-(defface hp/org-roam-fresh-link-face
-  '((t (:foreground "#4CAF50" :weight bold)))
-  "Face for fresh org-roam links.")
 
-(defun hp/org-roam-colorize-links-by-age ()
-  "Colorize org-roam links based on their age."
-  (interactive)
-  (save-excursion
-    (goto-char (point-min))
-    (while (re-search-forward "\\[\\[id:\\([^]]+\\)\\]\\[\\([^]]+\\)\\]\\]" nil t)
-      (let* ((node-id (match-string 1))
-             (node (org-roam-node-from-id node-id))
-             (overlay (make-overlay (match-beginning 0) (match-end 0))))
-        (when node
-          (let* ((file-path (org-roam-node-file node))
-                 (age-days (hp/org-roam-calculate-link-age file-path))
-                 (face (cond
-                        ((< age-days 30) 'hp/org-roam-fresh-link-face)
-                        ((> age-days hp/org-roam-link-decay-threshold) 'hp/org-roam-stale-link-face)
-                        (t 'default))))
-            (overlay-put overlay 'face face)
-            (overlay-put overlay 'help-echo 
-                        (format "Age: %d days, Weight: %.1f" 
-                               (round age-days)
-                               (hp/org-roam-get-decay-weight age-days)))))))))
-
-(defun hp/org-roam-cleanup-stale-content ()
-  "Interactive cleanup of stale content."
-  (interactive)
-  (let* ((all-nodes (org-roam-node-list))
-         (stale-nodes '()))
-    (dolist (node all-nodes)
-      (let* ((file-path (org-roam-node-file node))
-             (age-days (hp/org-roam-calculate-link-age file-path)))
-        (when (> age-days hp/org-roam-link-decay-threshold)
-          (push (cons age-days node) stale-nodes))))
-    
-    (if stale-nodes
-        (progn
-          (message "Found %d stale nodes" (length stale-nodes))
-          (dolist (stale-node (sort stale-nodes (lambda (a b) (> (car a) (car b)))))
-            (let* ((age (car stale-node))
-                   (node (cdr stale-node))
-                   (title (org-roam-node-title node)))
-              (when (y-or-n-p (format "Archive/refresh %s (%d days old)? " title (round age)))
-                (org-roam-node-visit node)
-                (hp/org-roam-refresh-node-timestamp)
-                (message "Refreshed: %s" title)))))
-      (message "No stale content found"))))
-
-;; Auto-colorize links in org-roam buffers
-(add-hook 'org-roam-mode-hook #'hp/org-roam-colorize-links-by-age)
+  (add-hook! '(org-mode-hook yas-after-exit-snippet-hook)
+             '(hp/org-add-overlay-tips-blocks
+               hp/org-add-overlay-info-blocks
+               hp/org-add-overlay-warning-blocks
+               hp/org-add-overlay-note-blocks
+               hp/org-add-overlay-question-blocks)))
 #+end_src
 
-***** Enhanced Capture with Context Awareness
+*** Org-agenda
+#+begin_src emacs-lisp
+(use-package! org-agenda
+  :config
+  ;; Setting the TODO keywords
+  (setq org-todo-keywords
+        '((sequence
+           "TODO(t)"                    ;What needs to be done
+           "NEXT(n)"                    ;A project without NEXTs is stuck
+           "|"
+           "DONE(d)")
+          (sequence
+           "REPEAT(e)"                    ;Repeating tasks
+           "|"
+           "DONE")
+          (sequence
+           "HOLD(h)"                    ;Task is on hold because of me
+           "PROJ(p)"                    ;Contains sub-tasks
+           "WAIT(w)"                    ;Tasks delegated to others
+           "REVIEW(r)"                  ;Daily notes that need reviews
+           "IDEA(i)"                    ;Daily notes that need reviews
+           "|"
+           "STOP(c)"                    ;Stopped/cancelled
+           "EVENT(m)"                   ;Meetings
+           ))
+        org-todo-keyword-faces
+        '(("[-]"  . +org-todo-active)
+          ("NEXT" . +org-todo-active)
+          ("[?]"  . +org-todo-onhold)
+          ("REVIEW" . +org-todo-onhold)
+          ("HOLD" . +org-todo-cancel)
+          ("PROJ" . +org-todo-project)
+          ("DONE"   . +org-todo-cancel)
+          ("STOP" . +org-todo-cancel)))
+  ;; Appearance
+  (setq org-agenda-span 20
+        org-agenda-prefix-format       " %i %?-2 t%s"
+        org-agenda-todo-keyword-format "%-6s"
+        org-agenda-current-time-string "ᐊ┈┈┈┈┈┈┈ Now"
+        org-agenda-time-grid '((today require-timed remove-match)
+                               (0900 1200 1400 1700 2100)
+                               "      "
+                               "┈┈┈┈┈┈┈┈┈┈┈┈┈")
+        )
+  ;; Clocking
+  (setq org-clock-persist 'history
+        org-columns-default-format "%50ITEM(Task) %10CLOCKSUM %16TIMESTAMP_IA"
+        org-agenda-start-with-log-mode t)
+  (org-clock-persistence-insinuate))
+
+
+(use-package! org-habit
+  :config
+  (setq org-habit-show-all-today t))
+#+end_src
+
+*** Org-babel
+Org-babel might be nice, but editing inside an Org-buffer means that you have to give up all the nice functionalities of the individual language's major more.
+Luckily, we have  =org-edit-special= (bound to ~SPC m '~ in Doom Emacs).
 
 #+begin_src emacs-lisp
-;; Context-aware capture system for org-roam
-(defvar hp/org-roam-context-buffer "*Org-Roam Context*"
-  "Buffer name for displaying capture context.")
+(setq org-src-window-setup 'current-window)
+#+end_src
 
-(defvar hp/org-roam-capture-context-history '()
-  "History of recent capture contexts.")
+Now, to set this up for different languages:
 
-(defun hp/org-roam-get-current-context ()
-  "Get the current context for capture (current file, project, etc.)."
-  (let ((context '()))
-    ;; Current file context
-    (when buffer-file-name
-      (push (cons "current-file" (file-name-base buffer-file-name)) context))
-    
-    ;; Current org-roam node context
-    (when-let ((node (org-roam-node-at-point)))
-      (push (cons "current-node" (org-roam-node-title node)) context)
-      (push (cons "current-node-id" (org-roam-node-id node)) context)
-      (push (cons "current-tags" (org-roam-node-tags node)) context))
-    
-    ;; Project context (if using projectile)
-    (when (and (bound-and-true-p projectile-mode) (projectile-project-p))
-      (push (cons "project" (projectile-project-name)) context))
-    
-    ;; Time context
-    (push (cons "time-of-day" 
-                (cond 
-                 ((< (string-to-number (format-time-string "%H")) 12) "morning")
-                 ((< (string-to-number (format-time-string "%H")) 17) "afternoon")
-                 (t "evening"))) context)
-    
-    ;; Day context
-    (push (cons "day-of-week" (downcase (format-time-string "%A"))) context)
-    
-    context))
+#+begin_src emacs-lisp
+(use-package! ob-julia
+  :commands org-babel-execute:julia)
+#+end_src
 
-(defun hp/org-roam-suggest-tags-from-context (context)
-  "Suggest tags based on capture context."
-  (let ((suggested-tags '()))
-    (dolist (ctx context)
-      (let ((key (car ctx))
-            (value (cdr ctx)))
-        (cond
-         ((string= key "project")
-          (push "project" suggested-tags))
-         ((string= key "current-tags")
-          (when (listp value)
-            (setq suggested-tags (append suggested-tags value))))
-         ((string= key "time-of-day")
-          (when (member value '("morning" "evening"))
-            (push "reflection" suggested-tags)))
-         ((string= key "day-of-week")
-          (when (member value '("saturday" "sunday"))
-            (push "personal" suggested-tags))))))
-    (delete-dups suggested-tags)))
+*** Org-cite
+#+begin_src emacs-lisp
+(use-package! oc
+  :config
+  (setq org-cite-csl-styles-dir (concat dropbox-directory "Documents/Zotero/styles/")
+        org-cite-export-processors '((t . (csl "chicago-author-date.csl")))))
+#+end_src
 
-(defun hp/org-roam-suggest-links-from-context (context)
-  "Suggest related nodes based on context."
-  (let ((suggested-links '())
-        (current-node-id (cdr (assoc "current-node-id" context)))
-        (current-tags (cdr (assoc "current-tags" context))))
-    
-    ;; Find nodes with similar tags
-    (when current-tags
-      (let ((similar-nodes (org-roam-db-query
-                           "SELECT DISTINCT nodes.id, nodes.title 
-                            FROM nodes 
-                            JOIN tags ON nodes.id = tags.node_id 
-                            WHERE tags.tag IN (%s) AND nodes.id != ?"
-                           (mapconcat (lambda (tag) (format "'%s'" tag)) current-tags ",")
-                           (or current-node-id ""))))
-        (dolist (node similar-nodes)
-          (push (cons (nth 1 node) (nth 0 node)) suggested-links))))
-    
-    (seq-take suggested-links 5))) ; Limit to 5 suggestions
+*** Org-roam
+**** Fundamental settings
+***** Customizing main interface
+#+begin_src emacs-lisp
+(use-package! org-roam
+  :after org
+  :init
+  (setq org-roam-directory "~/Documents/Roam/"
+        org-roam-completion-everywhere nil
+        ;;Functions tags are special types of tags which tells what the node are for
+        ;;In the future, this should probably be replaced by categories
+        hp/org-roam-function-tags '("compilation" "argument" "journal" "concept" "tool" "data" "bio" "literature" "event" "website"))
+  :config
+  ;; Org-roam interface
+  (cl-defmethod org-roam-node-hierarchy ((node org-roam-node))
+    "Return the node's TITLE, as well as it's HIERACHY."
+    (let* ((title (org-roam-node-title node))
+           (olp (mapcar (lambda (s) (if (> (length s) 10) (concat (substring s 0 10)  "...") s)) (org-roam-node-olp node)))
+           (level (org-roam-node-level node))
+           (filetitle (org-roam-get-keyword "TITLE" (org-roam-node-file node)))
+           (filetitle-or-name (if filetitle filetitle (file-name-nondirectory (org-roam-node-file node))))
+           (shortentitle (if (> (length filetitle-or-name) 20) (concat (substring filetitle-or-name 0 20)  "...") filetitle-or-name))
+           (separator (concat " " (nerd-icons-octicon "nf-oct-chevron_right") " ")))
+      (cond
+       ((= level 1) (concat (propertize (format "=level:%d=" level) 'display
+                                        (nerd-icons-faicon "nf-fa-file" :face 'nerd-icons-dyellow))
+                            (propertize shortentitle 'face 'org-roam-olp) separator title))
+       ((= level 2) (concat (propertize (format "=level:%d=" level) 'display
+                                        (nerd-icons-faicon "nf-fa-file" :face 'nerd-icons-dsilver))
+                            (propertize (concat shortentitle separator (string-join olp separator)) 'face 'org-roam-olp)
+                            separator title))
+       ((> level 2) (concat (propertize (format "=level:%d=" level) 'display
+                                        (nerd-icons-faicon "nf-fa-file" :face 'org-roam-olp))
+                            (propertize (concat shortentitle separator (string-join olp separator)) 'face 'org-roam-olp) separator title))
+       (t (concat (propertize (format "=level:%d=" level) 'display
+                              (nerd-icons-faicon "nf-fa-file" :face 'nerd-icons-yellow))
+                  (if filetitle title (propertize filetitle-or-name 'face 'nerd-icons-dyellow)))))))
 
-(defun hp/org-roam-enhanced-capture ()
-  "Enhanced capture with context awareness."
-  (interactive)
-  (let* ((context (hp/org-roam-get-current-context))
-         (suggested-tags (hp/org-roam-suggest-tags-from-context context))
-         (suggested-links (hp/org-roam-suggest-links-from-context context))
-         (capture-type (completing-read "Capture type: " 
-                                       '("note" "idea" "question" "meeting" "task" "research"))))
-    
-    ;; Store context for use in capture template
-    (setq hp/org-roam-current-capture-context context)
-    (setq hp/org-roam-current-suggested-tags suggested-tags)
-    (setq hp/org-roam-current-suggested-links suggested-links)
-    (setq hp/org-roam-current-capture-type capture-type)
-    
-    ;; Display context information
-    (hp/org-roam-show-capture-context context suggested-tags suggested-links)
-    
-    ;; Launch appropriate capture template
-    (cond
-     ((string= capture-type "meeting")
-      (org-roam-capture- :keys "m"))
-     ((string= capture-type "research")
-      (org-roam-capture- :keys "r"))
-     ((string= capture-type "task")
-      (org-roam-capture- :keys "t"))
-     ((string= capture-type "question")
-      (org-roam-capture- :keys "q"))
-     (t (org-roam-capture- :keys "c"))))) ; Enhanced default
+  (cl-defmethod org-roam-node-functiontag ((node org-roam-node))
+    "Return the FUNCTION TAG for each node. These tags are intended to be unique to each file, and represent the note's function.
+        journal data literature"
+    (let* ((tags (seq-filter (lambda (tag) (not (string= tag "ATTACH"))) (org-roam-node-tags node))))
+      (concat
+       ;; Argument or compilation
+       (cond
+        ((member "argument" tags)
+         (propertize "=f:argument=" 'display
+                     (nerd-icons-mdicon "nf-md-forum" :face 'nerd-icons-dred)))
+        ((member "compilation" tags)
+         (propertize "=f:compilation=" 'display
+                     (nerd-icons-mdicon "nf-md-format_list_text" :face 'nerd-icons-dyellow)))
+        (t (propertize "=f:empty=" 'display
+                       (nerd-icons-codicon "nf-cod-remove" :face 'org-hide))))
+       ;; concept, bio, data or event
+       (cond
+        ((member "concept" tags)
+         (propertize "=f:concept=" 'display
+                     (nerd-icons-mdicon "nf-md-blur" :face 'nerd-icons-dblue)))
+        ((member "tool" tags)
+         (propertize "=f:tool=" 'display
+                     (nerd-icons-mdicon "nf-md-tools" :face 'nerd-icons-dblue)))
+        ((member "bio" tags)
+         (propertize "=f:bio=" 'display
+                     (nerd-icons-octicon "nf-oct-people" :face 'nerd-icons-dblue)))
+        ((member "event" tags)
+         (propertize "=f:event=" 'display
+                     (nerd-icons-codicon "nf-cod-symbol_event" :face 'nerd-icons-dblue)))
+        ((member "data" tags)
+         (propertize "=f:data=" 'display
+                     (nerd-icons-mdicon "nf-md-chart_arc" :face 'nerd-icons-dblue)))
+        (t (propertize "=f:nothing=" 'display
+                       (nerd-icons-codicon "nf-cod-remove" :face 'org-hide))))
+       ;; literature
+       (cond
+        ((member "literature" tags)
+         (propertize "=f:literature=" 'display
+                     (nerd-icons-mdicon "nf-md-bookshelf" :face 'nerd-icons-dcyan)))
+        ((member "website" tags)
+         (propertize "=f:website=" 'display
+                     (nerd-icons-mdicon "nf-md-web" :face 'nerd-icons-dsilver)))
+        (t (propertize "=f:nothing=" 'display
+                       (nerd-icons-codicon "nf-cod-remove" :face 'org-hide))))
+       ;; journal
+       )))
 
-(defun hp/org-roam-show-capture-context (context suggested-tags suggested-links)
-  "Display capture context in a side buffer."
-  (let ((buffer (get-buffer-create hp/org-roam-context-buffer)))
-    (with-current-buffer buffer
-      (erase-buffer)
-      (insert "# Capture Context\n\n")
-      
-      (insert "## Current Context\n")
-      (dolist (ctx context)
-        (insert (format "- **%s**: %s\n" (car ctx) (cdr ctx))))
-      
-      (when suggested-tags
-        (insert "\n## Suggested Tags\n")
-        (dolist (tag suggested-tags)
-          (insert (format "- %s\n" tag))))
-      
-      (when suggested-links
-        (insert "\n## Related Notes\n")
-        (dolist (link suggested-links)
-          (insert (format "- [[id:%s][%s]]\n" (cdr link) (car link)))))
-      
-      (org-mode)
-      (goto-char (point-min)))
-    
-    ;; Show in side window
-    (display-buffer buffer '((display-buffer-in-side-window)
-                            (side . right)
-                            (window-width . 0.3)))))
+  (cl-defmethod org-roam-node-othertags ((node org-roam-node))
+    "Return the OTHER TAGS of each notes."
+    (let* ((tags (seq-filter (lambda (tag) (not (string= tag "ATTACH"))) (org-roam-node-tags node)))
+           (specialtags hp/org-roam-function-tags)
+           (othertags (seq-difference tags specialtags 'string=)))
+       (propertize
+        (string-join
+         (append '(" ") othertags)
+         (propertize "#" 'display
+                     (nerd-icons-faicon "nf-fa-hashtag" :face 'nerd-icons-dgreen)))
+        'face 'nerd-icons-dgreen)))
 
-(defun hp/org-roam-insert-context-template ()
-  "Insert context-aware template content."
-  (when (bound-and-true-p hp/org-roam-current-capture-context)
-    (let ((current-node (cdr (assoc "current-node" hp/org-roam-current-capture-context)))
-          (project (cdr (assoc "project" hp/org-roam-current-capture-context)))
-          (suggested-links hp/org-roam-current-suggested-links))
-      
-      (when current-node
-        (insert (format "\n** Context\nRelated to: [[id:%s][%s]]\n\n" 
-                       (cdr (assoc "current-node-id" hp/org-roam-current-capture-context))
-                       current-node)))
-      
-      (when project
-        (insert (format "Project: %s\n\n" project)))
-      
-      (when suggested-links
-        (insert "** Related Notes\n")
-        (dolist (link (seq-take suggested-links 3))
-          (insert (format "- [[id:%s][%s]]\n" (cdr link) (car link))))
-        (insert "\n")))))
+  (cl-defmethod org-roam-node-backlinkscount ((node org-roam-node))
+    (let* ((count (caar (org-roam-db-query
+                         [:select (funcall count source)
+                          :from links
+                          :where (= dest $s1)
+                          :and (= type "id")]
+                         (org-roam-node-id node)))))
+      (if (> count 0)
+          (concat (propertize "=has:backlinks=" 'display
+                              (nerd-icons-mdicon "nf-md-link" :face 'nerd-icons-blue)) (format "%d" count))
+        (concat " " (propertize "=not-backlinks=" 'display
+                                (nerd-icons-mdicon "nf-md-link" :face 'org-hide))  " "))))
 
-(defun hp/org-roam-get-suggested-tags-for-template ()
-  "Get suggested tags for use in capture templates."
-  (if (bound-and-true-p hp/org-roam-current-suggested-tags)
-      (string-join hp/org-roam-current-suggested-tags " ")
-    ""))
+  (cl-defmethod org-roam-node-directories ((node org-roam-node))
+    (if-let ((dirs (file-name-directory (file-relative-name (org-roam-node-file node) org-roam-directory))))
+        (concat
+         (if (string= "journal/" dirs)
+             (nerd-icons-mdicon	"nf-md-fountain_pen_tip" :face 'nerd-icons-dsilver)
+           (nerd-icons-mdicon	"nf-md-folder" :face 'nerd-icons-dsilver))
+         (propertize (string-join (f-split dirs) "/") 'face 'nerd-icons-dsilver) " ")
+      ""))
 
-(defvar hp/org-roam-current-capture-context nil)
-(defvar hp/org-roam-current-suggested-tags nil)
-(defvar hp/org-roam-current-suggested-links nil)
-(defvar hp/org-roam-current-capture-type nil)
+  (defun +marginalia--time-colorful (time)
+    (let* ((seconds (float-time (time-subtract (current-time) time)))
+           (color (doom-blend
+                   (face-attribute 'marginalia-on :foreground nil t)
+                   (face-attribute 'marginalia-off :foreground nil t)
+                   (/ 1.0 (log (+ 3 (/ (+ 1 seconds) 345600.0)))))))
+      ;; 1 - log(3 + 1/(days + 1)) % grey
+      (propertize (marginalia--time time) 'face (list :foreground color :slant 'italic))))
+
+  (setq org-roam-node-display-template
+        (concat  "${backlinkscount:16} ${functiontag} ${directories}${hierarchy}${othertags} ")
+        org-roam-node-annotation-function
+        (lambda (node) (+marginalia--time-colorful (org-roam-node-file-mtime node))))
+  )
+#+end_src
+
+Sorting =org-roam-node-find= by last modified time seems the most intuitive for me.
+
+#+begin_src emacs-lisp
+(defun org-roam-node-find-by-mtime ()
+  (find-file
+   (org-roam-node-file
+    (org-roam-node-read nil nil #'org-roam-node-read-sort-by-file-mtime))))
+
+(advice-add 'org-roam-node-find :override #'org-roam-node-find-by-mtime)
 #+end_src
 
 ***** Capture templates
@@ -2198,33 +1407,8 @@ Show page number when viewing PDFs:
   (setq org-roam-capture-templates
         `(("d" "default" plain "%?"
            :target
-           (file+head "%<%Y%m%d%H%M%S>-${slug}.org"
+           (file+head "${slug}_%<%Y-%m-%d--%H-%M-%S>.org"
                       "#+title: ${title}\n#+created: %U\n#+filetags: %(completing-read \"Function tags: \" hp/org-roam-function-tags)\n#+startup: overview")
-           :unnarrowed t)
-          ("c" "context-aware" plain "%(hp/org-roam-insert-context-template)%?"
-           :target
-           (file+head "%<%Y%m%d%H%M%S>-${slug}.org"
-                      "#+title: ${title}\n#+created: %U\n#+filetags: %(hp/org-roam-get-suggested-tags-for-template)\n#+context: %(cdr (assoc \"capture-type\" hp/org-roam-current-capture-context))\n#+startup: overview")
-           :unnarrowed t)
-          ("m" "meeting" plain "** Attendees\n- \n\n** Agenda\n%?\n\n** Notes\n\n** Action Items\n- [ ] \n\n%(hp/org-roam-insert-context-template)"
-           :target
-           (file+head "%<%Y%m%d%H%M%S>-meeting-${slug}.org"
-                      "#+title: Meeting: ${title}\n#+created: %U\n#+filetags: meeting %(hp/org-roam-get-suggested-tags-for-template)\n#+startup: overview")
-           :unnarrowed t)
-          ("r" "research" plain "** Research Question\n%?\n\n** Methodology\n\n** Findings\n\n** References\n\n%(hp/org-roam-insert-context-template)"
-           :target
-           (file+head "%<%Y%m%d%H%M%S>-research-${slug}.org"
-                      "#+title: Research: ${title}\n#+created: %U\n#+filetags: research %(hp/org-roam-get-suggested-tags-for-template)\n#+startup: overview")
-           :unnarrowed t)
-          ("t" "task" plain "** Description\n%?\n\n** Requirements\n\n** Progress\n- [ ] \n\n%(hp/org-roam-insert-context-template)"
-           :target
-           (file+head "%<%Y%m%d%H%M%S>-task-${slug}.org"
-                      "#+title: Task: ${title}\n#+created: %U\n#+filetags: task %(hp/org-roam-get-suggested-tags-for-template)\n#+startup: overview")
-           :unnarrowed t)
-          ("q" "question" plain "** Question\n%?\n\n** Context\n\n** Potential Answers\n\n** Resources\n\n%(hp/org-roam-insert-context-template)"
-           :target
-           (file+head "%<%Y%m%d%H%M%S>-question-${slug}.org"
-                      "#+title: Question: ${title}\n#+created: %U\n#+filetags: question %(hp/org-roam-get-suggested-tags-for-template)\n#+startup: overview")
            :unnarrowed t))))
 
 (use-package! org-roam-dailies
@@ -2235,609 +1419,7 @@ Show page number when viewing PDFs:
            :target
            (file+head "%<%Y-%m-%d>.org"
                       "#+title: %<%Y-%m-%d %a>\n#+filetags: journal\n#+startup: content\n#+created: %U\n\n")
-           :immediate-finish t))))
-
-;; Add web capture template to org-roam-capture-templates
-(after! org-roam-capture
-  (add-to-list 'org-roam-capture-templates
-               '("w" "web" plain "%i\n\n%?"
-                 :target
-                 (file+head "%<%Y%m%d%H%M%S>-${slug}.org"
-                            "#+title: ${title}\n#+created: %U\n#+filetags: web\n#+roam_refs: %c\n#+startup: overview\n\n")
-                 :unnarrowed t))
-  ;; Add web clipping template
-  (add-to-list 'org-roam-capture-templates
-               '("c" "clipping" plain "%i\n\n** Source\n- URL: %c\n- Date: %U\n\n** Content\n%?"
-                 :target
-                 (file+head "%<%Y%m%d%H%M%S>-clipping-${slug}.org"
-                            "#+title: ${title}\n#+created: %U\n#+filetags: clippings\n#+roam_refs: %c\n#+startup: overview\n\n")
-                 :unnarrowed t)))
-
-;; Function to add clipping to index
-(defun hp/org-roam-add-to-clippings-index (title file-path url)
-  "Add a new clipping entry to the Clippings index."
-  (let ((index-file (expand-file-name "Clippings.org" org-roam-directory)))
-    (unless (file-exists-p index-file)
-      ;; Create the index file if it doesn't exist
-      (with-temp-file index-file
-        (insert "#+title: Clippings Index\n")
-        (insert "#+created: ")
-        (insert (format-time-string "[%Y-%m-%d %a %H:%M]"))
-        (insert "\n#+filetags: index clippings\n")
-        (insert "#+startup: overview\n\n")
-        (insert "* Web Clippings\n\n")
-        (insert "This is an automatically maintained index of all web clippings.\n\n")))
-    
-    ;; Add the new clipping entry
-    (with-current-buffer (find-file-noselect index-file)
-      (goto-char (point-max))
-      (insert (format "- [[file:%s][%s]] - %s\n" 
-                      (file-relative-name file-path org-roam-directory)
-                      title
-                      (format-time-string "%Y-%m-%d")))
-      (when url
-        (insert (format "  - Source: %s\n" url)))
-      (save-buffer))))
-
-;; Hook to auto-add clippings to index
-(defun hp/org-roam-clipping-finalize-hook ()
-  "Hook to run after capturing a web clipping."
-  (when (and (bound-and-true-p org-capture-mode)
-             (string-match-p "clipping" (or (buffer-file-name) "")))
-    (let ((title (org-get-title))
-          (file-path (buffer-file-name))
-          (url (save-excursion
-                 (goto-char (point-min))
-                 (when (re-search-forward "#+roam_refs: \\(.*\\)" nil t)
-                   (match-string 1)))))
-      (when title
-        (hp/org-roam-add-to-clippings-index title file-path url)))))
-
-(add-hook 'org-capture-after-finalize-hook #'hp/org-roam-clipping-finalize-hook)
-
-***** Multi-Dimensional Note Navigation
-
-#+begin_src emacs-lisp
-;; Multi-dimensional navigation system for org-roam
-(defvar hp/org-roam-navigation-dimensions
-  '(("temporal" . (("recent" . "recently modified")
-                   ("old" . "older content")
-                   ("today" . "created today")
-                   ("week" . "created this week")))
-    ("semantic" . (("related" . "semantically related")
-                   ("similar" . "similar content")
-                   ("referenced" . "frequently referenced")
-                   ("orphaned" . "unlinked nodes")))
-    ("structural" . (("hub" . "highly connected nodes")
-                     ("leaf" . "terminal nodes")
-                     ("bridge" . "bridge nodes")
-                     ("cluster" . "clustered nodes")))
-    ("functional" . (("concept" . "conceptual notes")
-                     ("project" . "project-related")
-                     ("literature" . "literature notes")
-                     ("journal" . "journal entries"))))
-  "Dimensions and filters for multi-dimensional navigation.")
-
-(defvar hp/org-roam-current-navigation-state
-  '((dimension . "temporal")
-    (filter . "recent")
-    (depth . 2)
-    (context . nil))
-  "Current state of multi-dimensional navigation.")
-
-(defun hp/org-roam-navigate-by-dimension (dimension filter)
-  "Navigate nodes by specified dimension and filter."
-  (interactive 
-   (let* ((dim-choices (mapcar #'car hp/org-roam-navigation-dimensions))
-          (selected-dim (completing-read "Dimension: " dim-choices))
-          (filter-choices (cdr (assoc selected-dim hp/org-roam-navigation-dimensions)))
-          (selected-filter (completing-read "Filter: " (mapcar #'car filter-choices))))
-     (list selected-dim selected-filter)))
-  
-  (setf (alist-get 'dimension hp/org-roam-current-navigation-state) dimension)
-  (setf (alist-get 'filter hp/org-roam-current-navigation-state) filter)
-  
-  (let ((nodes (hp/org-roam-get-nodes-by-dimension dimension filter)))
-    (if nodes
-        (hp/org-roam-show-navigation-results dimension filter nodes)
-      (message "No nodes found for %s:%s" dimension filter))))
-
-(defun hp/org-roam-get-nodes-by-dimension (dimension filter)
-  "Get nodes based on dimension and filter criteria."
-  (let ((all-nodes (org-roam-node-list)))
-    (cond
-     ;; Temporal dimension
-     ((and (string= dimension "temporal") (string= filter "recent"))
-      (seq-take (sort all-nodes (lambda (a b)
-                                  (time-less-p (org-roam-node-file-mtime b)
-                                              (org-roam-node-file-mtime a)))) 20))
-     
-     ((and (string= dimension "temporal") (string= filter "today"))
-      (let ((today (format-time-string "%Y-%m-%d")))
-        (seq-filter (lambda (node)
-                      (string-prefix-p today 
-                                      (format-time-string "%Y-%m-%d" 
-                                                         (org-roam-node-file-mtime node))))
-                    all-nodes)))
-     
-     ((and (string= dimension "temporal") (string= filter "week"))
-      (let ((week-ago (time-subtract (current-time) (days-to-time 7))))
-        (seq-filter (lambda (node)
-                      (time-less-p week-ago (org-roam-node-file-mtime node)))
-                    all-nodes)))
-     
-     ;; Semantic dimension
-     ((and (string= dimension "semantic") (string= filter "orphaned"))
-      (seq-filter (lambda (node)
-                    (= 0 (caar (org-roam-db-query
-                               "SELECT COUNT(*) FROM links WHERE target = ?"
-                               (org-roam-node-id node)))))
-                  all-nodes))
-     
-     ((and (string= dimension "semantic") (string= filter "referenced"))
-      (let ((referenced-nodes '()))
-        (dolist (node all-nodes)
-          (let ((ref-count (caar (org-roam-db-query
-                                 "SELECT COUNT(*) FROM links WHERE target = ?"
-                                 (org-roam-node-id node)))))
-            (when (> ref-count 2)
-              (push (cons ref-count node) referenced-nodes))))
-        (mapcar #'cdr (sort referenced-nodes (lambda (a b) (> (car a) (car b)))))))
-     
-     ;; Structural dimension
-     ((and (string= dimension "structural") (string= filter "hub"))
-      (let ((hub-nodes '()))
-        (dolist (node all-nodes)
-          (let ((link-count (+ (caar (org-roam-db-query
-                                     "SELECT COUNT(*) FROM links WHERE source = ?"
-                                     (org-roam-node-id node)))
-                              (caar (org-roam-db-query
-                                     "SELECT COUNT(*) FROM links WHERE target = ?"
-                                     (org-roam-node-id node))))))
-            (when (> link-count 5)
-              (push (cons link-count node) hub-nodes))))
-        (mapcar #'cdr (sort hub-nodes (lambda (a b) (> (car a) (car b)))))))
-     
-     ((and (string= dimension "structural") (string= filter "leaf"))
-      (seq-filter (lambda (node)
-                    (and (= 0 (caar (org-roam-db-query
-                                    "SELECT COUNT(*) FROM links WHERE source = ?"
-                                    (org-roam-node-id node))))
-                         (> 0 (caar (org-roam-db-query
-                                    "SELECT COUNT(*) FROM links WHERE target = ?"
-                                    (org-roam-node-id node))))))
-                  all-nodes))
-     
-     ;; Functional dimension
-     ((and (string= dimension "functional") (string= filter "concept"))
-      (seq-filter (lambda (node)
-                    (member "concept" (org-roam-node-tags node)))
-                  all-nodes))
-     
-     ((and (string= dimension "functional") (string= filter "project"))
-      (seq-filter (lambda (node)
-                    (member "project" (org-roam-node-tags node)))
-                  all-nodes))
-     
-     (t all-nodes))))
-
-(defun hp/org-roam-show-navigation-results (dimension filter nodes)
-  "Show navigation results in a dedicated buffer."
-  (let ((buffer (get-buffer-create "*Org-Roam Navigation*")))
-    (with-current-buffer buffer
-      (erase-buffer)
-      (insert (format "# Multi-Dimensional Navigation: %s → %s\n\n" 
-                     (capitalize dimension) filter))
-      
-      (insert (format "Found %d nodes\n\n" (length nodes)))
-      
-      (dolist (node nodes)
-        (let ((title (org-roam-node-title node))
-              (id (org-roam-node-id node))
-              (tags (org-roam-node-tags node))
-              (mtime (format-time-string "%Y-%m-%d" (org-roam-node-file-mtime node))))
-          (insert (format "** [[id:%s][%s]]\n" id title))
-          (when tags
-            (insert (format "   Tags: %s\n" (string-join tags ", "))))
-          (insert (format "   Modified: %s\n\n" mtime))))
-      
-      (insert "\n## Navigation Options\n")
-      (insert "- Press 'n' for next dimension\n")
-      (insert "- Press 'f' to change filter\n") 
-      (insert "- Press 'r' to refine results\n")
-      (insert "- Press 'RET' on a link to visit\n")
-      
-      (org-mode)
-      (goto-char (point-min))
-      (hp/org-roam-navigation-mode 1))
-    
-    (pop-to-buffer buffer)))
-
-(define-minor-mode hp/org-roam-navigation-mode
-  "Minor mode for multi-dimensional org-roam navigation."
-  :keymap (let ((map (make-sparse-keymap)))
-            (define-key map (kbd "n") #'hp/org-roam-navigate-next-dimension)
-            (define-key map (kbd "f") #'hp/org-roam-navigate-change-filter)
-            (define-key map (kbd "r") #'hp/org-roam-navigate-refine)
-            (define-key map (kbd "q") #'quit-window)
-            map))
-
-(defun hp/org-roam-navigate-next-dimension ()
-  "Navigate to the next dimension."
-  (interactive)
-  (let* ((current-dim (alist-get 'dimension hp/org-roam-current-navigation-state))
-         (dimensions (mapcar #'car hp/org-roam-navigation-dimensions))
-         (current-index (seq-position dimensions current-dim))
-         (next-index (mod (1+ current-index) (length dimensions)))
-         (next-dim (nth next-index dimensions))
-         (filters (cdr (assoc next-dim hp/org-roam-navigation-dimensions)))
-         (first-filter (caar filters)))
-    (hp/org-roam-navigate-by-dimension next-dim first-filter)))
-
-(defun hp/org-roam-navigate-change-filter ()
-  "Change filter within current dimension."
-  (interactive)
-  (let* ((current-dim (alist-get 'dimension hp/org-roam-current-navigation-state))
-         (filters (cdr (assoc current-dim hp/org-roam-navigation-dimensions)))
-         (selected-filter (completing-read "Filter: " (mapcar #'car filters))))
-    (hp/org-roam-navigate-by-dimension current-dim selected-filter)))
-
-(defun hp/org-roam-navigate-refine ()
-  "Refine current navigation results."
-  (interactive)
-  (let ((refinement (completing-read "Refine by: " 
-                                    '("tag" "title-contains" "recent-only" "exclude-tag"))))
-    (message "Refinement: %s (implementation pending)" refinement)))
-
-(defun hp/org-roam-create-navigation-dashboard ()
-  "Create a navigation dashboard showing all dimensions."
-  (interactive)
-  (let ((buffer (get-buffer-create "*Org-Roam Dashboard*")))
-    (with-current-buffer buffer
-      (erase-buffer)
-      (insert "# Org-Roam Navigation Dashboard\n\n")
-      
-      (dolist (dim-info hp/org-roam-navigation-dimensions)
-        (let ((dimension (car dim-info))
-              (filters (cdr dim-info)))
-          (insert (format "## %s Dimension\n" (capitalize dimension)))
-          (dolist (filter-info filters)
-            (let* ((filter (car filter-info))
-                   (description (cdr filter-info))
-                   (count (length (hp/org-roam-get-nodes-by-dimension dimension filter))))
-              (insert (format "- [[elisp:(hp/org-roam-navigate-by-dimension \"%s\" \"%s\")][%s]] (%d nodes) - %s\n"
-                             dimension filter filter count description))))
-          (insert "\n")))
-      
-      (insert "## Quick Actions\n")
-      (insert "- [[elisp:(hp/org-roam-enhanced-capture)][Enhanced Capture]]\n")
-      (insert "- [[elisp:(hp/org-roam-find-similar-nodes)][Find Similar Nodes]]\n")
-      (insert "- [[elisp:(hp/org-roam-cluster-analysis)][Cluster Analysis]]\n")
-      (insert "- [[elisp:(hp/org-roam-find-stale-links)][Find Stale Links]]\n")
-      
-      (org-mode)
-      (goto-char (point-min)))
-    (pop-to-buffer buffer)))
-
-(defun hp/org-roam-spatial-navigation ()
-  "Navigate through org-roam using spatial/visual metaphors."
-  (interactive)
-  (let* ((current-node (org-roam-node-at-point))
-         (connected-nodes (when current-node
-                           (org-roam-db-query
-                            "SELECT target FROM links WHERE source = ?"
-                            (org-roam-node-id current-node))))
-         (directions '("north" "south" "east" "west" "up" "down")))
-    (when current-node
-      (let ((buffer (get-buffer-create "*Spatial Navigation*")))
-        (with-current-buffer buffer
-          (erase-buffer)
-          (insert (format "# Spatial Navigation from: %s\n\n" 
-                         (org-roam-node-title current-node)))
-          (insert "```\n")
-          (insert "      [North]\n")
-          (insert "        ↑\n")
-          (insert "[West] ← YOU → [East]\n")
-          (insert "        ↓\n")
-          (insert "      [South]\n")
-          (insert "```\n\n")
-          
-          (let ((direction-nodes (seq-take connected-nodes 6)))
-            (dotimes (i (length direction-nodes))
-              (let* ((direction (nth i directions))
-                     (node-id (car (nth i direction-nodes)))
-                     (node (org-roam-node-from-id node-id)))
-                (when node
-                  (insert (format "**%s**: [[id:%s][%s]]\n" 
-                                 (capitalize direction) node-id 
-                                 (org-roam-node-title node)))))))
-          
-          (org-mode)
-          (goto-char (point-min)))
-        (pop-to-buffer buffer)))))
-#+end_src
-
-***** Research Thread Visualization System
-
-#+begin_src emacs-lisp
-;; Research thread visualization system for org-roam
-(defvar hp/org-roam-thread-types
-  '(("concept-development" . "🧠")
-    ("literature-review" . "📚")
-    ("methodology" . "🔬")
-    ("analysis" . "📊")
-    ("argumentation" . "💭")
-    ("citation-chain" . "🔗")
-    ("temporal-sequence" . "⏰"))
-  "Types of research threads with their visual indicators.")
-
-(defvar hp/org-roam-thread-colors
-  '(("concept-development" . "#FF6B6B")
-    ("literature-review" . "#4ECDC4")
-    ("methodology" . "#45B7D1")
-    ("analysis" . "#96CEB4")
-    ("argumentation" . "#FFEAA7")
-    ("citation-chain" . "#DDA0DD")
-    ("temporal-sequence" . "#98D8C8"))
-  "Colors for different research thread types.")
-
-(defun hp/org-roam-identify-research-threads ()
-  "Identify and categorize research threads in the knowledge base."
-  (interactive)
-  (let* ((all-nodes (org-roam-node-list))
-         (threads (make-hash-table :test 'equal))
-         (processed-nodes (make-hash-table :test 'equal)))
-    
-    (dolist (node all-nodes)
-      (unless (gethash (org-roam-node-id node) processed-nodes)
-        (let ((thread (hp/org-roam-trace-thread node)))
-          (when (> (length thread) 2) ; Only consider threads with 3+ nodes
-            (let* ((thread-type (hp/org-roam-classify-thread thread))
-                   (thread-key (format "%s-%d" thread-type (hash-table-count threads))))
-              (puthash thread-key thread threads)
-              ;; Mark nodes as processed
-              (dolist (thread-node thread)
-                (puthash (org-roam-node-id thread-node) t processed-nodes)))))))
-    
-    (hp/org-roam-visualize-threads threads)))
-
-(defun hp/org-roam-trace-thread (start-node &optional visited max-depth)
-  "Trace a research thread starting from a node."
-  (setq visited (or visited (make-hash-table :test 'equal)))
-  (setq max-depth (or max-depth 10))
-  
-  (when (and (> max-depth 0) 
-             (not (gethash (org-roam-node-id start-node) visited)))
-    (puthash (org-roam-node-id start-node) t visited)
-    
-    (let* ((connected-ids (org-roam-db-query
-                          "SELECT target FROM links WHERE source = ?"
-                          (org-roam-node-id start-node)))
-           (connected-nodes (mapcar (lambda (id) (org-roam-node-from-id (car id)))
-                                   connected-ids))
-           (thread (list start-node)))
-      
-      ;; Follow the strongest connections
-      (dolist (node connected-nodes)
-        (when (and node (not (gethash (org-roam-node-id node) visited)))
-          (let ((connection-strength (hp/org-roam-calculate-connection-strength 
-                                     start-node node)))
-            (when (> connection-strength 0.5) ; Threshold for strong connections
-              (let ((sub-thread (hp/org-roam-trace-thread node visited (1- max-depth))))
-                (setq thread (append thread sub-thread)))))))
-      
-      thread)))
-
-(defun hp/org-roam-calculate-connection-strength (node1 node2)
-  "Calculate connection strength between two nodes."
-  (let* ((shared-tags (seq-intersection (org-roam-node-tags node1) 
-                                       (org-roam-node-tags node2)))
-         (tag-score (* 0.3 (length shared-tags)))
-         (temporal-score (hp/org-roam-calculate-temporal-proximity node1 node2))
-         (citation-score (hp/org-roam-check-citation-relationship node1 node2)))
-    (+ tag-score temporal-score citation-score)))
-
-(defun hp/org-roam-calculate-temporal-proximity (node1 node2)
-  "Calculate temporal proximity score between two nodes."
-  (let* ((time1 (org-roam-node-file-mtime node1))
-         (time2 (org-roam-node-file-mtime node2))
-         (time-diff (abs (float-time (time-subtract time1 time2))))
-         (days-diff (/ time-diff 86400)))
-    (cond
-     ((< days-diff 1) 0.4)   ; Same day
-     ((< days-diff 7) 0.3)   ; Same week
-     ((< days-diff 30) 0.2)  ; Same month
-     (t 0.1))))              ; Older
-
-(defun hp/org-roam-check-citation-relationship (node1 node2)
-  "Check if nodes have citation relationships."
-  (let* ((id1 (org-roam-node-id node1))
-         (id2 (org-roam-node-id node2))
-         (direct-link (org-roam-db-query
-                      "SELECT COUNT(*) FROM links WHERE source = ? AND target = ?"
-                      id1 id2))
-         (reverse-link (org-roam-db-query
-                       "SELECT COUNT(*) FROM links WHERE source = ? AND target = ?"
-                       id2 id1)))
-    (cond
-     ((or (> (caar direct-link) 0) (> (caar reverse-link) 0)) 0.5)
-     (t 0))))
-
-(defun hp/org-roam-classify-thread (thread)
-  "Classify a research thread based on its characteristics."
-  (let* ((tags (flatten-list (mapcar #'org-roam-node-tags thread)))
-         (tag-frequencies (make-hash-table :test 'equal)))
-    
-    ;; Count tag frequencies
-    (dolist (tag tags)
-      (puthash tag (1+ (gethash tag tag-frequencies 0)) tag-frequencies))
-    
-    ;; Classify based on dominant tags and patterns
-    (cond
-     ((or (gethash "literature" tag-frequencies)
-          (gethash "paper" tag-frequencies)
-          (gethash "review" tag-frequencies))
-      "literature-review")
-     ((or (gethash "concept" tag-frequencies)
-          (gethash "theory" tag-frequencies)
-          (gethash "definition" tag-frequencies))
-      "concept-development")
-     ((or (gethash "method" tag-frequencies)
-          (gethash "methodology" tag-frequencies)
-          (gethash "experiment" tag-frequencies))
-      "methodology")
-     ((or (gethash "analysis" tag-frequencies)
-          (gethash "data" tag-frequencies)
-          (gethash "results" tag-frequencies))
-      "analysis")
-     ((hp/org-roam-has-temporal-sequence thread)
-      "temporal-sequence")
-     (t "concept-development"))))
-
-(defun hp/org-roam-has-temporal-sequence (thread)
-  "Check if thread represents a clear temporal sequence."
-  (when (> (length thread) 2)
-    (let ((times (mapcar #'org-roam-node-file-mtime thread)))
-      (equal times (sort (copy-sequence times) #'time-less-p)))))
-
-(defun hp/org-roam-visualize-threads (threads)
-  "Visualize research threads in a dedicated buffer."
-  (let ((buffer (get-buffer-create "*Research Threads*")))
-    (with-current-buffer buffer
-      (erase-buffer)
-      (insert "# Research Thread Visualization\n\n")
-      
-      (maphash (lambda (thread-key thread)
-                 (let* ((thread-type (car (split-string thread-key "-")))
-                        (thread-icon (cdr (assoc thread-type hp/org-roam-thread-types)))
-                        (thread-color (cdr (assoc thread-type hp/org-roam-thread-colors))))
-                   
-                   (insert (format "## %s %s Thread (%d nodes)\n\n" 
-                                  (or thread-icon "🔗") 
-                                  (capitalize (replace-regexp-in-string "-" " " thread-type))
-                                  (length thread)))
-                   
-                   ;; Create visual thread representation
-                   (dotimes (i (length thread))
-                     (let* ((node (nth i thread))
-                            (title (org-roam-node-title node))
-                            (id (org-roam-node-id node))
-                            (connector (if (< i (1- (length thread))) " → " "")))
-                       (insert (format "[[id:%s][%s]]%s" id title connector))))
-                   
-                   (insert "\n\n")
-                   
-                   ;; Add thread analysis
-                   (insert "### Thread Analysis\n")
-                   (let* ((start-time (org-roam-node-file-mtime (car thread)))
-                          (end-time (org-roam-node-file-mtime (car (last thread))))
-                          (duration (/ (float-time (time-subtract end-time start-time)) 86400))
-                          (all-tags (delete-dups (flatten-list (mapcar #'org-roam-node-tags thread)))))
-                     (insert (format "- **Duration**: %.1f days\n" duration))
-                     (insert (format "- **Key Tags**: %s\n" (string-join all-tags ", ")))
-                     (insert (format "- **Thread Strength**: %.2f\n" 
-                                    (hp/org-roam-calculate-thread-strength thread))))
-                   
-                   (insert "\n---\n\n")))
-               threads)
-      
-      (insert "## Thread Statistics\n")
-      (insert (format "- Total threads identified: %d\n" (hash-table-count threads)))
-      
-      (let ((type-counts (make-hash-table :test 'equal)))
-        (maphash (lambda (key _)
-                   (let ((type (car (split-string key "-"))))
-                     (puthash type (1+ (gethash type type-counts 0)) type-counts)))
-                 threads)
-        (insert "\n### Thread Types\n")
-        (maphash (lambda (type count)
-                   (let ((icon (cdr (assoc type hp/org-roam-thread-types))))
-                     (insert (format "- %s %s: %d threads\n" 
-                                    (or icon "🔗") 
-                                    (capitalize (replace-regexp-in-string "-" " " type)) 
-                                    count))))
-                 type-counts))
-      
-      (org-mode)
-      (goto-char (point-min)))
-    (pop-to-buffer buffer)))
-
-(defun hp/org-roam-calculate-thread-strength (thread)
-  "Calculate the overall strength of a research thread."
-  (if (< (length thread) 2)
-      0.0
-    (let ((total-strength 0.0)
-          (connections 0))
-      (dotimes (i (1- (length thread)))
-        (let ((strength (hp/org-roam-calculate-connection-strength 
-                        (nth i thread) (nth (1+ i) thread))))
-          (setq total-strength (+ total-strength strength))
-          (setq connections (1+ connections))))
-      (if (> connections 0)
-          (/ total-strength connections)
-        0.0))))
-
-(defun hp/org-roam-export-thread-graph (thread-key)
-  "Export a research thread as a visual graph."
-  (interactive 
-   (list (completing-read "Thread to export: " 
-                         (hash-table-keys hp/org-roam-current-threads))))
-  (let* ((thread (gethash thread-key hp/org-roam-current-threads))
-         (graph-file (expand-file-name 
-                     (format "thread-%s.dot" thread-key) 
-                     temporary-file-directory)))
-    (with-temp-file graph-file
-      (insert "digraph ResearchThread {\n")
-      (insert "  rankdir=LR;\n")
-      (insert "  node [shape=box, style=filled];\n")
-      
-      (dotimes (i (length thread))
-        (let* ((node (nth i thread))
-               (title (org-roam-node-title node))
-               (clean-title (replace-regexp-in-string "[^a-zA-Z0-9]" "_" title)))
-          (insert (format "  %s [label=\"%s\"];\n" clean-title title))
-          (when (< i (1- (length thread)))
-            (let* ((next-node (nth (1+ i) thread))
-                   (next-title (org-roam-node-title next-node))
-                   (next-clean (replace-regexp-in-string "[^a-zA-Z0-9]" "_" next-title)))
-              (insert (format "  %s -> %s;\n" clean-title next-clean))))))
-      
-      (insert "}\n"))
-    
-    (message "Thread graph exported to: %s" graph-file)
-    (when (executable-find "dot")
-      (let ((png-file (replace-regexp-in-string "\\.dot$" ".png" graph-file)))
-        (shell-command (format "dot -Tpng %s -o %s" graph-file png-file))
-        (message "PNG graph created: %s" png-file)))))
-
-(defvar hp/org-roam-current-threads (make-hash-table :test 'equal)
-  "Currently identified research threads.")
-
-;; Store threads globally for export functionality
-(advice-add 'hp/org-roam-visualize-threads :before
-            (lambda (threads)
-              (setq hp/org-roam-current-threads threads)))
-#+end_src
-
-***** Org-download configuration
-#+begin_src emacs-lisp
-(use-package! org-download
-  :after org
-  :config
-  (setq org-download-method 'directory
-        org-download-image-dir "attachments"
-        org-download-heading-lvl nil
-        org-download-timestamp "%Y%m%d-%H%M%S_"
-        org-download-screenshot-method "screencapture -i %s"
-        org-download-screenshot-file (expand-file-name "screenshot.png" temporary-file-directory))
-  
-  ;; Automatically download images when pasting URLs
-  (setq org-download-image-html-width 600)
-  
-  ;; Enable drag-and-drop for images
-  (org-download-enable))
-#+end_src
-
+           :immediate-finish t)))
   (map! :leader
         :prefix "n"
         (:prefix ("j" . "journal")
@@ -2861,66 +1443,6 @@ Show page number when viewing PDFs:
          :desc "Obsidian specify path" "p" #'obsidian-specify-path
          :desc "Open vault with treemacs" "V" #'hp/obsidian-open-vault-with-treemacs))
 
-;; Org-roam tools keybindings
-(map! :leader
-        :prefix "n"
-        (:prefix ("r" . "roam")
-         (:prefix ("t" . "tools")
-          ;; File management tools
-          :desc "Rename roam files" "r" #'hp/org-roam-rename-files
-          :desc "Flatten roam files" "f" #'hp/org-roam-flatten-files
-          
-          ;; Semantic links
-          (:prefix ("s" . "semantic links")
-           :desc "Insert semantic link" "l" #'hp/org-roam-insert-semantic-link
-           :desc "Show relationship graph" "g" #'hp/org-roam-show-relationship-graph
-           :desc "Find by relationship" "f" #'hp/org-roam-find-by-relationship
-           :desc "Relationship stats" "s" #'hp/org-roam-get-relationship-stats)
-          
-          ;; Clustering & tagging
-          (:prefix ("c" . "clustering")
-           :desc "Auto-tag current node" "t" #'hp/org-roam-auto-tag-current-node
-           :desc "Find similar nodes" "s" #'hp/org-roam-find-similar-nodes
-           :desc "Cluster analysis" "c" #'hp/org-roam-cluster-analysis
-           :desc "Update tag weights" "w" #'hp/org-roam-update-tag-weights)
-          
-          ;; Time-based decay & refresh
-          (:prefix ("d" . "decay & refresh")
-           :desc "Find stale links" "s" #'hp/org-roam-find-stale-links
-           :desc "Refresh node timestamp" "r" #'hp/org-roam-refresh-node-timestamp
-           :desc "Weighted node search" "w" #'hp/org-roam-weighted-node-search
-           :desc "Colorize links by age" "c" #'hp/org-roam-colorize-links-by-age
-           :desc "Cleanup stale content" "x" #'hp/org-roam-cleanup-stale-content)
-          
-          ;; Enhanced capture
-          (:prefix ("e" . "enhanced capture")
-           :desc "Context-aware capture" "c" #'hp/org-roam-enhanced-capture
-           :desc "Show current context" "s" (lambda () (interactive) 
-                                               (hp/org-roam-show-capture-context 
-                                                (hp/org-roam-get-current-context) '() '())))
-          
-          ;; Multi-dimensional navigation
-          (:prefix ("n" . "navigation")
-           :desc "Navigate by dimension" "d" #'hp/org-roam-navigate-by-dimension
-           :desc "Navigation dashboard" "D" #'hp/org-roam-create-navigation-dashboard
-           :desc "Spatial navigation" "s" #'hp/org-roam-spatial-navigation)
-          
-          ;; Research thread visualization
-          (:prefix ("v" . "visualization")
-           :desc "Identify research threads" "t" #'hp/org-roam-identify-research-threads
-           :desc "Export thread graph" "e" #'hp/org-roam-export-thread-graph)
-          
-          ;; Org-web-tools
-          (:prefix ("w" . "web tools")
-           :desc "Insert link for URL" "l" #'org-web-tools-insert-link-for-url
-           :desc "Insert web page as entry" "e" #'org-web-tools-insert-web-page-as-entry
-           :desc "Read URL as Org" "r" #'org-web-tools-read-url-as-org
-           :desc "Convert links to page entries" "c" #'org-web-tools-convert-links-to-page-entries
-           :desc "Archive attach" "a" #'org-web-tools-archive-attach
-           :desc "Archive view" "v" #'org-web-tools-archive-view)))
-         
-         :desc "Capture web page" "w" (lambda () (interactive) (org-roam-capture- :keys "w"))
-         :desc "Capture web clipping" "c" (lambda () (interactive) (org-roam-capture- :keys "c"))))
 
 ;; Custom function to open Obsidian vault with treemacs
 (defun hp/obsidian-open-vault-with-treemacs ()
@@ -3807,7 +2329,6 @@ For files not in Zettelkasten format, renames them first."
         :desc "Stop auto sync" "S" #'hp/obsidian-to-org-stop-auto-sync)))
 #+end_src
 
-#+begin_src emacs-lisp
 (use-package! websocket
   :after org-roam)
 
@@ -4032,6 +2553,11 @@ This makes the comand =citar-open-notes=  (bind to ~SPC n b~) use Org-roam's tem
 The bibliography notes created this way will be set up with proper =ID= and =ROAM_REFS= properties.
 The integration also comes with a nice inteface when following an org citation
 
+#+caption: Following a citation in Org-mode, with Citar and Org-roam integraion
+[[file:pics/citar-org-roam-follow.png]]
+
+Here's the relevent part:
+
 #+begin_src emacs-lisp
 (use-package citar-org-roam
   :after citar org-roam
@@ -4058,10 +2584,6 @@ The integration also comes with a nice inteface when following an org citation
            ) "\n"))
   (citar-org-roam-mode))
 #+end_src
-
-#+RESULTS:
-: t
-
 **** Backlinks count display
 
 #+begin_src emacs-lisp
@@ -4199,8 +2721,7 @@ The following comand create a new heading and add current time to it.
   (insert (format-time-string "%H:%M ")))
 
 ;; Bind the function to a key combination, for example C-c t
-(after! org
-  (define-key org-mode-map (kbd "C-c t") 'hp/org-insert-timestamped-bullet))
+(define-key org-mode-map (kbd "C-c t") 'hp/org-insert-timestamped-bullet)
 #+end_src
 
 #+RESULTS:
@@ -4354,7 +2875,127 @@ Rudimentary =matlab-mode= setups.
 ** Elfeeds
 
 #+begin_src emacs-lisp
-;; Load elfeed configuration
-(load! "modules/hp-elfeed.el")
+(use-package! elfeed
+  :commands (elfeed)
+  :custom
+  (rmh-elfeed-org-files (list (concat org-directory "/Feeds/elfeed.org")))
+  (elfeed-db-directory (concat org-directory "/Feeds/elfeed.db/"))
+  (elfeed-goodies/wide-threshold 0.2)
+  :bind ("<f10>" . #'elfeed)
+  :config
+  ;; (defun hp/elfeed-entry-line-draw (entry)
+  ;;   (insert (format "%s" (elfeed-meta--plist entry))))
+  (defun hp/elfeed-entry-line-draw (entry)
+    "Print ENTRY to the buffer."
+    (let* ((date (elfeed-search-format-date (elfeed-entry-date entry)))
+           (title (or (elfeed-meta entry :title) (elfeed-entry-title entry) ""))
+           (title-faces (elfeed-search--faces (elfeed-entry-tags entry)))
+           (feed (elfeed-entry-feed entry))
+           (feed-title
+            (when feed
+              (or (elfeed-meta feed :title) (elfeed-feed-title feed))))
+           (tags (mapcar #'symbol-name (elfeed-entry-tags entry)))
+           (tags-str (concat "[" (mapconcat 'identity tags ",") "]"))
+           (title-width (- (window-width) elfeed-goodies/feed-source-column-width
+                           elfeed-goodies/tag-column-width 4))
+           (title-column (elfeed-format-column
+                          title (elfeed-clamp
+                                 elfeed-search-title-min-width
+                                 title-width
+                                 title-width)
+                          :left))
+           (tag-column (elfeed-format-column
+                        tags-str (elfeed-clamp (length tags-str)
+                                               elfeed-goodies/tag-column-width
+                                               elfeed-goodies/tag-column-width)
+                        :left))
+           (feed-column (elfeed-format-column
+                         feed-title (elfeed-clamp elfeed-goodies/feed-source-column-width
+                                                  elfeed-goodies/feed-source-column-width
+                                                  elfeed-goodies/feed-source-column-width)
+                         :left))
+           (entry-score (elfeed-format-column (number-to-string (elfeed-score-scoring-get-score-from-entry entry)) 6 :left))
+           ;; (entry-authors (concatenate-authors
+           ;;                 (elfeed-meta entry :authors)))
+           ;; (authors-column (elfeed-format-column entry-authors elfeed-goodies/tag-column-width :left))
+           )
+      (if (>= (window-width) (* (frame-width) elfeed-goodies/wide-threshold))
+          (progn
+            (insert (propertize entry-score 'face 'elfeed-search-feed-face) " ")
+            (insert (propertize date 'face 'elfeed-search-date-face) " ")
+            (insert (propertize feed-column 'face 'elfeed-search-feed-face) " ")
+            (insert (propertize tag-column 'face 'elfeed-search-tag-face) " ")
+            ;; (insert (propertize authors-column 'face 'elfeed-search-tag-face) " ")
+            (insert (propertize title 'face title-faces 'kbd-help title))
+            )
+        (insert (propertize title 'face title-faces 'kbd-help title)))))
+
+  (defun concatenate-authors (authors-list)
+    "Given AUTHORS-LIST, list of plists; return string of all authors concatenated."
+    (if (> (length authors-list) 1)
+        (format "%s et al." (plist-get (nth 0 authors-list) :name))
+      (plist-get (nth 0 authors-list) :name)))
+
+  (defun search-header/draw-wide (separator-left separator-right search-filter stats db-time)
+    (let* ((update (format-time-string "%Y-%m-%d %H:%M:%S %z" db-time))
+           (lhs (list
+                 (powerline-raw (-pad-string-to "Score" (- 5 5)) 'powerline-active1 'l)
+                 (funcall separator-left 'powerline-active1 'powerline-active2)
+                 (powerline-raw (-pad-string-to "Date" (- 9 4)) 'powerline-active2 'l)
+                 (funcall separator-left 'powerline-active2 'powerline-active1)
+                 (powerline-raw (-pad-string-to "Feed" (- elfeed-goodies/feed-source-column-width 4)) 'powerline-active1 'l)
+                 (funcall separator-left 'powerline-active1 'powerline-active2)
+                 (powerline-raw (-pad-string-to "Tags" (- elfeed-goodies/tag-column-width 6)) 'powerline-active2 'l)
+                 (funcall separator-left 'powerline-active2 'mode-line)
+                 (powerline-raw "Subject" 'mode-line 'l)))
+           (rhs (search-header/rhs separator-left separator-right search-filter stats update)))
+      (concat (powerline-render lhs)
+              (powerline-fill 'mode-line (powerline-width rhs))
+              (powerline-render rhs))))
+
+  ;; Tag entry as read when open
+  (defadvice! hp/mark-read (&rest _)
+    :before 'elfeed-search-show-entry
+    :before 'elfeed-search-browse-url
+    (let* ((offset (- (line-number-at-pos) elfeed-search--offset))
+           (current-entry (nth offset elfeed-search-entries)))
+      (elfeed-tag-1 current-entry 'read)))
+
+  ;; Faces for diferent kinds of feeds
+  (defface hp/elfeed-blog
+    `((t :foreground ,(doom-color 'blue)))
+    "Marks a Elfeed blog.")
+  (push '(blog hp/elfeed-blog)
+        elfeed-search-face-alist)
+  (push '(read elfeed-search-title-face)
+        elfeed-search-face-alist)
+
+  ;; Variables
+  (setq elfeed-search-print-entry-function 'hp/elfeed-entry-line-draw
+        elfeed-search-filter "@8-weeks-ago -bury "))
+
 #+end_src
 
+Elfeed-score helps with keeping track of the more important entries.
+
+#+begin_src emacs-lisp
+(use-package! elfeed-score
+  :after elfeed
+  :custom
+  (elfeed-score-score-file (concat org-directory "/Feeds/elfeed.score"))
+  :config
+  (map! :map elfeed-search-mode-map
+        :n "=" elfeed-score-map)
+  (elfeed-score-enable))
+#+end_src
+
+Like Org-roam, Elfeed should be opened in it's own workspace:
+
+#+begin_src emacs-lisp
+(after! (elfeed)
+  (defadvice! hp/elfeed-in-own-workspace (&rest _)
+  "Open Elfeeds in its own workspace."
+  :before #'elfeed
+  (when (modulep! :ui workspaces)
+    (+workspace-switch "Elfeeds" t))))
+#+end_src
